@@ -6,8 +6,14 @@ import android.inputmethodservice.KeyboardView
 import android.view.View
 import android.view.inputmethod.EditorInfo
 import android.widget.Button
+import android.widget.ImageButton
 import android.widget.LinearLayout
+import android.widget.TextView
 import android.util.Log
+import android.os.Vibrator
+import android.os.VibrationEffect
+import android.os.Build
+import android.content.Context
 import com.example.smartkeyboard.ai.AITextProcessor
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -20,19 +26,26 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
     private var keyboard: Keyboard? = null
 
     // Mood selection state
-    private var currentMood: MoodType = MoodType.NORMAL
     private var moodButtonsContainer: LinearLayout? = null
-    private var btnRespectful: Button? = null
-    private var btnFunny: Button? = null
-    private var btnAngry: Button? = null
-    private var btnToggleMood: Button? = null
-    private var btnAI: Button? = null
-    private var moodButtonsVisible: Boolean = false
+    private var btnRespectful: LinearLayout? = null
+    private var btnFunny: LinearLayout? = null
+    private var btnAngry: LinearLayout? = null
+    private var moodSelectorPill: LinearLayout? = null
+    private var moodEmoji: TextView? = null
+    private var btnEnhanceText: ImageButton? = null
 
     // AI integration
     private var aiTextProcessor: AITextProcessor? = null
     private var isAIEnabled: Boolean = false
     private val serviceScope = CoroutineScope(Dispatchers.Main + Job())
+
+    // Keyboard state
+    private var moodButtonsVisible = false
+    private var currentMood = MoodType.NORMAL
+    private var isShifted = false
+
+    // Haptic feedback
+    private var vibrator: Vibrator? = null
 
     enum class MoodType {
         NORMAL, RESPECTFUL, FUNNY, ANGRY
@@ -44,6 +57,9 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
         keyboard = Keyboard(this, R.xml.qwerty)
         keyboardView?.keyboard = keyboard
         keyboardView?.setOnKeyboardActionListener(this)
+
+        // Initialize vibrator for haptic feedback
+        vibrator = getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
 
         // Initialize mood buttons
         setupMoodButtons(inputView)
@@ -65,7 +81,8 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
     
     // KeyboardView.OnKeyboardActionListener methods
     override fun onPress(primaryCode: Int) {
-        // Called when a key is pressed
+        // Called when a key is pressed - provide haptic feedback
+        performHapticFeedback()
     }
     
     override fun onRelease(primaryCode: Int) {
@@ -102,8 +119,21 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
             else -> {
                 // Handle regular character input
                 if (primaryCode > 0) {
-                    val character = primaryCode.toChar().toString()
-                    handleTextInput(character)
+                    var character = primaryCode.toChar()
+
+                    // Apply shift/uppercase if needed
+                    if (isShifted && character.isLetter()) {
+                        character = character.uppercaseChar()
+                        // Auto-disable shift after typing one character (like normal keyboards)
+                        isShifted = false
+                        keyboard?.isShifted = false
+                        keyboardView?.invalidateAllKeys()
+                    }
+
+                    // For single characters, just commit directly (no mood transformation)
+                    // Mood transformation only applies when using the enhance button
+                    val inputConnection = currentInputConnection
+                    inputConnection?.commitText(character.toString(), 1)
                 }
             }
         }
@@ -131,61 +161,79 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
     
     private fun handleShift() {
         if (keyboard != null) {
-            val shifted = keyboard!!.isShifted
-            keyboard!!.isShifted = !shifted
+            isShifted = !keyboard!!.isShifted
+            keyboard!!.isShifted = isShifted
             keyboardView?.invalidateAllKeys()
         }
     }
 
     private fun setupMoodButtons(inputView: View) {
         moodButtonsContainer = inputView.findViewById(R.id.mood_buttons_container)
+        moodSelectorPill = inputView.findViewById(R.id.mood_selector_pill)
+        moodEmoji = inputView.findViewById(R.id.mood_emoji)
         btnRespectful = inputView.findViewById(R.id.btn_respectful)
         btnFunny = inputView.findViewById(R.id.btn_funny)
         btnAngry = inputView.findViewById(R.id.btn_angry)
-        btnToggleMood = inputView.findViewById(R.id.btn_toggle_mood)
-        btnAI = inputView.findViewById(R.id.btn_ai_toggle)
+        btnEnhanceText = inputView.findViewById(R.id.btn_enhance_text)
 
-        // Set click listeners
-        btnRespectful?.setOnClickListener { selectMood(MoodType.RESPECTFUL) }
-        btnFunny?.setOnClickListener { selectMood(MoodType.FUNNY) }
-        btnAngry?.setOnClickListener { selectMood(MoodType.ANGRY) }
-        btnToggleMood?.setOnClickListener { toggleMoodButtonsVisibility() }
-        btnAI?.setOnClickListener { toggleAI() }
+        // Set click listeners with haptic feedback
+        btnRespectful?.setOnClickListener {
+            performHapticFeedback()
+            selectMood(MoodType.RESPECTFUL)
+        }
+        btnFunny?.setOnClickListener {
+            performHapticFeedback()
+            selectMood(MoodType.FUNNY)
+        }
+        btnAngry?.setOnClickListener {
+            performHapticFeedback()
+            selectMood(MoodType.ANGRY)
+        }
+        moodSelectorPill?.setOnClickListener {
+            performHapticFeedback()
+            toggleMoodButtonsVisibility()
+        }
+        btnEnhanceText?.setOnClickListener {
+            performHapticFeedback()
+            enhanceCurrentText()
+        }
 
         // Initially hide mood buttons
         moodButtonsContainer?.visibility = View.GONE
-        moodButtonsVisible = false
+
+        // Initialize AI by default
+        initializeAIFromSettings()
+        isAIEnabled = true
 
         updateMoodButtonsUI()
-        updateToggleButtonAppearance()
-        updateAIButtonAppearance()
+        updateMoodPillAppearance()
     }
 
     private fun selectMood(mood: MoodType) {
         currentMood = mood
         updateMoodButtonsUI()
-        updateToggleButtonAppearance()
+        updateMoodPillAppearance()
     }
 
     private fun toggleMoodButtonsVisibility() {
         moodButtonsVisible = !moodButtonsVisible
         moodButtonsContainer?.visibility = if (moodButtonsVisible) View.VISIBLE else View.GONE
 
-        // Update toggle button appearance
-        updateToggleButtonAppearance()
+        // Update mood pill appearance
+        updateMoodPillAppearance()
     }
 
     private fun updateMoodButtonsUI() {
         // Reset all buttons to normal state
-        btnRespectful?.setBackgroundResource(R.drawable.key_bg)
-        btnFunny?.setBackgroundResource(R.drawable.key_bg)
-        btnAngry?.setBackgroundResource(R.drawable.key_bg)
+        btnRespectful?.setBackgroundResource(R.drawable.mood_item_bg)
+        btnFunny?.setBackgroundResource(R.drawable.mood_item_bg)
+        btnAngry?.setBackgroundResource(R.drawable.mood_item_bg)
 
         // Highlight selected mood
         when (currentMood) {
-            MoodType.RESPECTFUL -> btnRespectful?.setBackgroundResource(R.drawable.key_bg_selected)
-            MoodType.FUNNY -> btnFunny?.setBackgroundResource(R.drawable.key_bg_selected)
-            MoodType.ANGRY -> btnAngry?.setBackgroundResource(R.drawable.key_bg_selected)
+            MoodType.RESPECTFUL -> btnRespectful?.setBackgroundResource(R.drawable.google_key_bg_selected)
+            MoodType.FUNNY -> btnFunny?.setBackgroundResource(R.drawable.google_key_bg_selected)
+            MoodType.ANGRY -> btnAngry?.setBackgroundResource(R.drawable.google_key_bg_selected)
             MoodType.NORMAL -> { /* No button highlighted */ }
         }
     }
@@ -261,22 +309,21 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
         }
     }
 
-    private fun updateToggleButtonAppearance() {
-        // Update toggle button based on current mood and visibility
-        val moodEmoji = when (currentMood) {
-            MoodType.RESPECTFUL -> "🙏"
-            MoodType.FUNNY -> "😄"
+    private fun updateMoodPillAppearance() {
+        // Update mood emoji in the pill
+        val moodEmojiText = when (currentMood) {
+            MoodType.RESPECTFUL -> "❤️"
+            MoodType.FUNNY -> "😊"
             MoodType.ANGRY -> "😠"
-            MoodType.NORMAL -> "🎭"
+            MoodType.NORMAL -> "❤️"
         }
+        moodEmoji?.text = moodEmojiText
 
-        btnToggleMood?.text = moodEmoji
-
-        // Highlight toggle button if a mood is selected
+        // Highlight pill if a mood is selected
         if (currentMood != MoodType.NORMAL) {
-            btnToggleMood?.setBackgroundResource(R.drawable.key_bg_selected)
+            moodSelectorPill?.setBackgroundResource(R.drawable.google_key_bg_selected)
         } else {
-            btnToggleMood?.setBackgroundResource(R.drawable.key_bg)
+            moodSelectorPill?.setBackgroundResource(R.drawable.mood_pill_bg)
         }
     }
 
@@ -290,36 +337,7 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
         }
     }
 
-    /**
-     * Toggle AI functionality
-     */
-    private fun toggleAI() {
-        if (aiTextProcessor == null) {
-            // AI not initialized, try to load from settings
-            initializeAIFromSettings()
-            if (aiTextProcessor == null) {
-                Log.w(TAG, "AI not initialized. Please set API key in settings first.")
-                return
-            }
-        }
 
-        isAIEnabled = !isAIEnabled
-        Log.d(TAG, "AI ${if (isAIEnabled) "enabled" else "disabled"}")
-        updateAIButtonAppearance()
-    }
-
-    /**
-     * Update AI button appearance
-     */
-    private fun updateAIButtonAppearance() {
-        if (isAIEnabled && aiTextProcessor != null) {
-            btnAI?.setBackgroundResource(R.drawable.key_bg_selected)
-            btnAI?.text = "🤖✨"
-        } else {
-            btnAI?.setBackgroundResource(R.drawable.key_bg)
-            btnAI?.text = "🤖"
-        }
-    }
 
     /**
      * Initialize AI processor with API key
@@ -365,19 +383,150 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
                 val result = aiTextProcessor?.enhanceText(text, aiMood)
                 result?.fold(
                     onSuccess = { enhancedText ->
-                        commitText(enhancedText)
+                        // Now replace the text with AI response
+                        replaceAllTextWithEnhanced(enhancedText)
                     },
                     onFailure = { error ->
                         Log.w(TAG, "AI enhancement failed, using local transformation", error)
                         val fallbackText = applyMoodTransformation(text)
-                        commitText(fallbackText)
+                        replaceAllTextWithEnhanced(fallbackText)
                     }
                 )
             } catch (e: Exception) {
                 Log.e(TAG, "Error in AI enhancement", e)
                 val fallbackText = applyMoodTransformation(text)
-                commitText(fallbackText)
+                replaceAllTextWithEnhanced(fallbackText)
             }
+        }
+    }
+
+    /**
+     * Replace all text in input field with enhanced text
+     */
+    private fun replaceAllTextWithEnhanced(enhancedText: String) {
+        val inputConnection = currentInputConnection ?: return
+        try {
+            // Select all text and replace with enhanced version
+            inputConnection.performContextMenuAction(android.R.id.selectAll)
+            inputConnection.commitText(enhancedText, 1)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error replacing text", e)
+        }
+    }
+
+    /**
+     * Enhance the current text in the input field
+     */
+    private fun enhanceCurrentText() {
+        val inputConnection = currentInputConnection ?: return
+
+        try {
+            // Get all text before cursor
+            val textBeforeCursor = inputConnection.getTextBeforeCursor(1000, 0)?.toString() ?: ""
+            // Get all text after cursor
+            val textAfterCursor = inputConnection.getTextAfterCursor(1000, 0)?.toString() ?: ""
+
+            val currentText = textBeforeCursor + textAfterCursor
+
+            if (currentText.isBlank()) {
+                Log.d(TAG, "No text to enhance")
+                return
+            }
+
+            Log.d(TAG, "Enhancing text: '$currentText'")
+
+            // DON'T delete text immediately - keep it visible until response arrives
+            // Enhance the text based on current settings
+            if (isAIEnabled && aiTextProcessor != null) {
+                // Use AI enhancement - text will be replaced when response arrives
+                enhanceTextWithAI(currentText)
+            } else {
+                // Use local mood transformation - replace immediately since it's instant
+                inputConnection.performContextMenuAction(android.R.id.selectAll)
+                val enhancedText = enhanceTextLocally(currentText)
+                inputConnection.commitText(enhancedText, 1)
+            }
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Error enhancing current text", e)
+        }
+    }
+
+    /**
+     * Enhance text using local mood transformations for longer text
+     */
+    private fun enhanceTextLocally(text: String): String {
+        return when (currentMood) {
+            MoodType.RESPECTFUL -> enhanceRespectfully(text)
+            MoodType.FUNNY -> enhanceFunnily(text)
+            MoodType.ANGRY -> enhanceAngrily(text)
+            MoodType.NORMAL -> enhanceNormally(text)
+        }
+    }
+
+    private fun enhanceRespectfully(text: String): String {
+        val lowerText = text.lowercase().trim()
+        return when {
+            lowerText.contains("want") && lowerText.contains("number") ->
+                "I would be honored to have your contact number, if you don't mind."
+            lowerText.startsWith("hi") || lowerText.startsWith("hello") ->
+                "Good day, ${text.substringAfter(" ").ifBlank { "sir/madam" }}. ${text.substringAfter("hi").substringAfter("hello").trim()}"
+            lowerText.contains("help") ->
+                "I would greatly appreciate your assistance with this matter."
+            lowerText.contains("thanks") || lowerText.contains("thank") ->
+                "I am deeply grateful for your time and consideration."
+            lowerText.contains("sorry") ->
+                "I sincerely apologize for any inconvenience caused."
+            else -> "I hope you don't mind, but $text"
+        }
+    }
+
+    private fun enhanceFunnily(text: String): String {
+        val lowerText = text.lowercase().trim()
+        return when {
+            lowerText.contains("want") && lowerText.contains("number") ->
+                "Hey there! Could I snag your digits? 📱😄"
+            lowerText.startsWith("hi") || lowerText.startsWith("hello") ->
+                "Howdy partner! 🤠 What's cooking?"
+            lowerText.contains("help") ->
+                "SOS! I need a superhero! 🦸‍♂️ Can you save the day?"
+            lowerText.contains("thanks") || lowerText.contains("thank") ->
+                "You're absolutely amazing! Thanks a million! 🙌✨"
+            lowerText.contains("sorry") ->
+                "Oopsie daisy! My bad! 😅🤷‍♂️"
+            else -> "$text (but make it fun! 🎉)"
+        }
+    }
+
+    private fun enhanceAngrily(text: String): String {
+        val lowerText = text.lowercase().trim()
+        return when {
+            lowerText.contains("want") && lowerText.contains("number") ->
+                "I NEED YOUR NUMBER RIGHT NOW!"
+            lowerText.startsWith("hi") || lowerText.startsWith("hello") ->
+                "WHAT'S UP?! ${text.substringAfter(" ").uppercase()}"
+            lowerText.contains("help") ->
+                "I REQUIRE IMMEDIATE ASSISTANCE!"
+            lowerText.contains("thanks") || lowerText.contains("thank") ->
+                "FINALLY! About time!"
+            lowerText.contains("sorry") ->
+                "YOU BETTER BE SORRY!"
+            else -> text.uppercase() + "!"
+        }
+    }
+
+    private fun enhanceNormally(text: String): String {
+        // Just clean up the text - capitalize first letter, add period if needed
+        val cleaned = text.trim()
+        return if (cleaned.isNotEmpty()) {
+            val capitalized = cleaned.first().uppercase() + cleaned.drop(1)
+            if (capitalized.endsWith(".") || capitalized.endsWith("!") || capitalized.endsWith("?")) {
+                capitalized
+            } else {
+                "$capitalized."
+            }
+        } else {
+            text
         }
     }
 
@@ -387,6 +536,27 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
     private fun commitText(text: String) {
         val inputConnection = currentInputConnection
         inputConnection?.commitText(text, 1)
+    }
+
+    /**
+     * Provide haptic feedback for key presses
+     */
+    private fun performHapticFeedback() {
+        try {
+            vibrator?.let { vib ->
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                    // Use VibrationEffect for API 26+
+                    val effect = VibrationEffect.createOneShot(25, VibrationEffect.DEFAULT_AMPLITUDE)
+                    vib.vibrate(effect)
+                } else {
+                    // Fallback for older versions
+                    @Suppress("DEPRECATION")
+                    vib.vibrate(25)
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error providing haptic feedback", e)
+        }
     }
 
     companion object {

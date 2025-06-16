@@ -5,6 +5,7 @@
     <!-- Network permissions for AI API calls -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.VIBRATE" />
 
     <application
         android:allowBackup="true"
@@ -40,8 +41,9 @@
         <service
             android:name=".MyKeyboardService"
             android:permission="android.permission.BIND_INPUT_METHOD"
-            android:exported="true">
-            <intent-filter>
+            android:exported="true"
+            android:label="Smart Keyboard">
+            <intent-filter android:priority="0">
                 <action android:name="android.view.InputMethod" />
             </intent-filter>
             <meta-data

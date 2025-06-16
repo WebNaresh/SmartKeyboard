@@ -76,8 +76,10 @@ class AITextProcessor(private val apiKey: String) {
                     Log.w(TAG, "Empty response from AI")
                     Result.success(text) // Return original text if AI response is empty
                 } else {
-                    Log.d(TAG, "AI enhanced text: $enhancedText")
-                    Result.success(enhancedText)
+                    // Clean up any quotes that might be in the response
+                    val cleanedText = cleanResponseText(enhancedText)
+                    Log.d(TAG, "AI enhanced text: $cleanedText")
+                    Result.success(cleanedText)
                 }
             } else {
                 val errorMsg = "AI API error: ${response.code()} - ${response.message()}"
@@ -100,11 +102,12 @@ class AITextProcessor(private val apiKey: String) {
             }
             
             val systemPrompt = """
-                You are a grammar and spelling correction assistant. 
+                You are a grammar and spelling correction assistant.
                 Correct any grammar, spelling, or punctuation errors in the given text.
                 Maintain the original tone and meaning.
                 If the text is already correct, return it unchanged.
-                Only return the corrected text, no explanations.
+                IMPORTANT: Return ONLY the corrected text without quotes, explanations, or additional formatting.
+                Do not wrap the response in quotation marks.
             """.trimIndent()
             
             val request = ChatCompletionRequest(
@@ -129,7 +132,9 @@ class AITextProcessor(private val apiKey: String) {
                 if (correctedText.isNullOrBlank()) {
                     Result.success(text)
                 } else {
-                    Result.success(correctedText)
+                    // Clean up any quotes that might be in the response
+                    val cleanedText = cleanResponseText(correctedText)
+                    Result.success(cleanedText)
                 }
             } else {
                 val errorMsg = "Grammar correction error: ${response.code()}"
@@ -147,7 +152,8 @@ class AITextProcessor(private val apiKey: String) {
             You are a text enhancement assistant for a smart keyboard.
             Your job is to improve the user's text while maintaining their intended meaning.
             Keep responses concise and natural.
-            Only return the enhanced text, no explanations.
+            IMPORTANT: Return ONLY the enhanced text without quotes, explanations, or additional formatting.
+            Do not wrap the response in quotation marks.
         """.trimIndent()
         
         val moodPrompt = when (mood) {
@@ -180,11 +186,29 @@ class AITextProcessor(private val apiKey: String) {
     
     private fun buildUserPrompt(text: String, mood: MoodType): String {
         return when (mood) {
-            MoodType.RESPECTFUL -> "Please make this text more respectful and polite: \"$text\""
-            MoodType.FUNNY -> "Please make this text more fun and humorous: \"$text\""
-            MoodType.ANGRY -> "Please make this text more assertive and emphatic: \"$text\""
-            MoodType.NORMAL -> "Please improve this text: \"$text\""
+            MoodType.RESPECTFUL -> "Please make this text more respectful and polite: $text"
+            MoodType.FUNNY -> "Please make this text more fun and humorous: $text"
+            MoodType.ANGRY -> "Please make this text more assertive and emphatic: $text"
+            MoodType.NORMAL -> "Please improve this text: $text"
         }
+    }
+
+    /**
+     * Clean up AI response text by removing unwanted quotes and formatting
+     */
+    private fun cleanResponseText(text: String): String {
+        var cleaned = text.trim()
+
+        // Remove surrounding quotes if present
+        if ((cleaned.startsWith("\"") && cleaned.endsWith("\"")) ||
+            (cleaned.startsWith("'") && cleaned.endsWith("'"))) {
+            cleaned = cleaned.substring(1, cleaned.length - 1)
+        }
+
+        // Remove any leading/trailing quotes that might remain
+        cleaned = cleaned.trim('"', '\'', ' ')
+
+        return cleaned
     }
     
     enum class MoodType {
