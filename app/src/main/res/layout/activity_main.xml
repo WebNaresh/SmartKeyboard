@@ -1,0 +1,61 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/main"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp"
+    android:background="#FF1E1E1E"
+    android:gravity="center"
+    tools:context=".MainActivity">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="🧠 Smart Keyboard"
+        android:textSize="32sp"
+        android:textStyle="bold"
+        android:textColor="#FFFFFF"
+        android:layout_marginBottom="16dp" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="AI-Powered Typing Experience"
+        android:textSize="16sp"
+        android:textColor="#CCCCCC"
+        android:layout_marginBottom="48dp" />
+
+    <Button
+        android:id="@+id/btn_settings"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="⚙️ Settings &amp; API Key"
+        android:textSize="16sp"
+        android:background="@drawable/key_bg_selected"
+        android:textColor="#FFFFFF"
+        android:layout_marginBottom="16dp"
+        android:padding="16dp" />
+
+    <Button
+        android:id="@+id/btn_test_keyboard"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="🧪 Test Keyboard"
+        android:textSize="16sp"
+        android:background="@drawable/key_bg"
+        android:textColor="#FFFFFF"
+        android:layout_marginBottom="32dp"
+        android:padding="16dp" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Setup Instructions:\n1. Configure your OpenAI API key in Settings\n2. Enable Smart Keyboard in System Settings\n3. Test the keyboard features"
+        android:textSize="14sp"
+        android:textColor="#CCCCCC"
+        android:gravity="center"
+        android:lineSpacingExtra="4dp" />
+
+</LinearLayout>

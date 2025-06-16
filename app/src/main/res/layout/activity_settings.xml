@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="16dp"
+    android:background="#FF1E1E1E">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Smart Keyboard Settings"
+        android:textSize="24sp"
+        android:textStyle="bold"
+        android:textColor="#FFFFFF"
+        android:gravity="center"
+        android:layout_marginBottom="32dp" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="OpenAI API Key"
+        android:textSize="16sp"
+        android:textColor="#FFFFFF"
+        android:layout_marginBottom="8dp" />
+
+    <EditText
+        android:id="@+id/et_api_key"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="Enter your OpenAI API key (sk-...)"
+        android:textColor="#FFFFFF"
+        android:textColorHint="#CCCCCC"
+        android:background="@drawable/key_bg"
+        android:padding="12dp"
+        android:layout_marginBottom="16dp"
+        android:inputType="textPassword" />
+
+    <Button
+        android:id="@+id/btn_save_api_key"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Save API Key"
+        android:background="@drawable/key_bg_selected"
+        android:textColor="#FFFFFF"
+        android:layout_marginBottom="16dp" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Instructions:"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        android:textColor="#FFFFFF"
+        android:layout_marginTop="16dp"
+        android:layout_marginBottom="8dp" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="1. Get your OpenAI API key from https://platform.openai.com/api-keys\n2. Enter the API key above and save\n3. Enable Smart Keyboard in Settings > Languages &amp; input\n4. Use the 🤖 button to toggle AI features\n5. Use mood buttons (🎭) for different text styles"
+        android:textSize="14sp"
+        android:textColor="#CCCCCC"
+        android:lineSpacingExtra="4dp"
+        android:layout_marginBottom="24dp" />
+
+    <Button
+        android:id="@+id/btn_test_keyboard"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Test Keyboard"
+        android:background="@drawable/key_bg"
+        android:textColor="#FFFFFF" />
+
+</LinearLayout>
