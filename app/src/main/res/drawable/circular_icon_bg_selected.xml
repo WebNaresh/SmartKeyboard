@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    
+    <!-- Shadow layer for elevated appearance -->
+    <item android:top="0dp" android:left="0dp" android:right="0dp" android:bottom="4dp">
+        <shape android:shape="oval">
+            <solid android:color="#2A000000" />
+        </shape>
+    </item>
+    
+    <!-- Glowing outline -->
+    <item android:top="0dp" android:left="0dp" android:right="0dp" android:bottom="2dp">
+        <shape android:shape="oval">
+            <solid android:color="#FF1C1C1C" />
+            <stroke android:width="2dp" android:color="#66FFFFFF" />
+        </shape>
+    </item>
+    
+    <!-- Main circular surface -->
+    <item android:top="2dp" android:left="2dp" android:right="2dp" android:bottom="4dp">
+        <shape android:shape="oval">
+            <solid android:color="#FF1C1C1C" />
+        </shape>
+    </item>
+    
+</layer-list>

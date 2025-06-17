@@ -5,10 +5,12 @@ import android.inputmethodservice.Keyboard
 import android.inputmethodservice.KeyboardView
 import android.view.View
 import android.view.inputmethod.EditorInfo
+import android.view.animation.AnimationUtils
 import android.widget.Button
 import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.widget.FrameLayout
 import android.util.Log
 import android.os.Vibrator
 import android.os.VibrationEffect
@@ -22,7 +24,7 @@ import kotlinx.coroutines.launch
 
 class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionListener {
 
-    private var keyboardView: KeyboardView? = null
+    private var keyboardView: MaterialKeyboardView? = null
     private var keyboard: Keyboard? = null
 
     // Mood selection state
@@ -30,9 +32,9 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
     private var btnRespectful: LinearLayout? = null
     private var btnFunny: LinearLayout? = null
     private var btnAngry: LinearLayout? = null
-    private var moodSelectorPill: LinearLayout? = null
+    private var moodSelectorPill: FrameLayout? = null
     private var moodEmoji: TextView? = null
-    private var btnEnhanceText: ImageButton? = null
+    private var btnEnhanceText: FrameLayout? = null
 
     // AI integration
     private var aiTextProcessor: AITextProcessor? = null
@@ -41,7 +43,7 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
 
     // Keyboard state
     private var moodButtonsVisible = false
-    private var currentMood = MoodType.NORMAL
+    private var currentMood = MoodType.RESPECTFUL
     private var isShifted = false
 
     // Haptic feedback
@@ -169,12 +171,12 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
 
     private fun setupMoodButtons(inputView: View) {
         moodButtonsContainer = inputView.findViewById(R.id.mood_buttons_container)
-        moodSelectorPill = inputView.findViewById(R.id.mood_selector_pill)
-        moodEmoji = inputView.findViewById(R.id.mood_emoji)
-        btnRespectful = inputView.findViewById(R.id.btn_respectful)
-        btnFunny = inputView.findViewById(R.id.btn_funny)
-        btnAngry = inputView.findViewById(R.id.btn_angry)
-        btnEnhanceText = inputView.findViewById(R.id.btn_enhance_text)
+        moodSelectorPill = inputView.findViewById<FrameLayout>(R.id.mood_selector_pill)
+        moodEmoji = inputView.findViewById<TextView>(R.id.mood_emoji)
+        btnRespectful = inputView.findViewById<LinearLayout>(R.id.btn_respectful)
+        btnFunny = inputView.findViewById<LinearLayout>(R.id.btn_funny)
+        btnAngry = inputView.findViewById<LinearLayout>(R.id.btn_angry)
+        btnEnhanceText = inputView.findViewById<FrameLayout>(R.id.btn_enhance_text)
 
         // Set click listeners with haptic feedback
         btnRespectful?.setOnClickListener {
@@ -211,13 +213,49 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
 
     private fun selectMood(mood: MoodType) {
         currentMood = mood
+
+        // Add scale animation to selected mood button
+        val selectedButton = when (mood) {
+            MoodType.RESPECTFUL -> btnRespectful
+            MoodType.FUNNY -> btnFunny
+            MoodType.ANGRY -> btnAngry
+            MoodType.NORMAL -> null
+        }
+
+        selectedButton?.let { button ->
+            val scaleAnimation = AnimationUtils.loadAnimation(this, R.anim.mood_item_scale)
+            button.startAnimation(scaleAnimation)
+        }
+
         updateMoodButtonsUI()
         updateMoodPillAppearance()
+
+        // Hide mood menu after selection with animation
+        if (moodButtonsVisible) {
+            toggleMoodButtonsVisibility()
+        }
     }
 
     private fun toggleMoodButtonsVisibility() {
         moodButtonsVisible = !moodButtonsVisible
-        moodButtonsContainer?.visibility = if (moodButtonsVisible) View.VISIBLE else View.GONE
+
+        if (moodButtonsVisible) {
+            // Show with animation
+            moodButtonsContainer?.visibility = View.VISIBLE
+            val scaleInAnimation = AnimationUtils.loadAnimation(this, R.anim.mood_menu_scale_in)
+            moodButtonsContainer?.startAnimation(scaleInAnimation)
+        } else {
+            // Hide with animation
+            val scaleOutAnimation = AnimationUtils.loadAnimation(this, R.anim.mood_menu_scale_out)
+            scaleOutAnimation.setAnimationListener(object : android.view.animation.Animation.AnimationListener {
+                override fun onAnimationStart(animation: android.view.animation.Animation?) {}
+                override fun onAnimationRepeat(animation: android.view.animation.Animation?) {}
+                override fun onAnimationEnd(animation: android.view.animation.Animation?) {
+                    moodButtonsContainer?.visibility = View.GONE
+                }
+            })
+            moodButtonsContainer?.startAnimation(scaleOutAnimation)
+        }
 
         // Update mood pill appearance
         updateMoodPillAppearance()
@@ -319,12 +357,8 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
         }
         moodEmoji?.text = moodEmojiText
 
-        // Highlight pill if a mood is selected
-        if (currentMood != MoodType.NORMAL) {
-            moodSelectorPill?.setBackgroundResource(R.drawable.google_key_bg_selected)
-        } else {
-            moodSelectorPill?.setBackgroundResource(R.drawable.mood_pill_bg)
-        }
+        // Highlight pill if a mood is selected with glowing outline (Respectful is default, so always highlighted)
+        moodSelectorPill?.isSelected = true
     }
 
     /**

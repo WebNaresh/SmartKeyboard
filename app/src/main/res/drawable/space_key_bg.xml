@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    
+    <!-- Pressed state -->
+    <item android:state_pressed="true">
+        <shape android:shape="rectangle">
+            <solid android:color="#FF2A2A2A" />
+            <corners android:radius="8dp" />
+            <stroke android:width="1dp" android:color="#FF3A3A3A" />
+        </shape>
+    </item>
+    
+    <!-- Default state - flat design -->
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="#FF1C1C1C" />
+            <corners android:radius="8dp" />
+            <stroke android:width="1dp" android:color="#FF2A2A2A" />
+        </shape>
+    </item>
+    
+</selector>
