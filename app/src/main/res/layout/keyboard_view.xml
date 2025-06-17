@@ -40,7 +40,7 @@
 
             </FrameLayout>
 
-            <!-- Right side: Circular enhance button (Hidden for cleaner UI) -->
+            <!-- Right side: Circular enhance button -->
             <FrameLayout
                 android:id="@+id/btn_enhance_text"
                 android:layout_width="40dp"
@@ -52,7 +52,7 @@
                 android:focusable="true"
                 android:contentDescription="Enhance your message"
                 android:tooltipText="Enhance your message"
-                android:visibility="gone">
+                android:visibility="visible">
 
                 <TextView
                     android:layout_width="match_parent"

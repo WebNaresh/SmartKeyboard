@@ -183,18 +183,24 @@ class AITextProcessor(private val apiKey: String) {
                 when {
                     text.contains("hi", ignoreCase = true) && text.contains("want", ignoreCase = true) ->
                         "Hello! I would be grateful if you could share your contact number with me."
+                    text.contains("hi", ignoreCase = true) && text.contains("sir", ignoreCase = true) && text.contains("good", ignoreCase = true) ->
+                        "Good morning, sir! I hope you're having a wonderful day."
+                    text.contains("hi", ignoreCase = true) ->
+                        "Hello! How are you doing today?"
                     text.contains("hello", ignoreCase = true) ->
                         "Good day! I hope you're doing well."
                     text.contains("thanks", ignoreCase = true) ->
                         "Thank you very much for your assistance."
                     text.contains("please", ignoreCase = true) ->
-                        "I would be most grateful if you could $text"
+                        "I would be most grateful if you could help with: $text"
                     text.contains("need", ignoreCase = true) ->
                         text.replace("need", "would appreciate", ignoreCase = true)
                     text.contains("want", ignoreCase = true) ->
                         text.replace("want", "would like", ignoreCase = true)
-                    words.size <= 2 -> "Please $text"
-                    else -> "I hope you don't mind, but $text"
+                    text.contains("good", ignoreCase = true) ->
+                        "Good day to you!"
+                    words.size <= 2 -> text.replaceFirstChar { it.uppercase() }
+                    else -> "I would like to respectfully say: $text"
                 }
             }
             MoodType.FUNNY -> {

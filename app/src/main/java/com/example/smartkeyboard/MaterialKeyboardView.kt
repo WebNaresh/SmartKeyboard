@@ -10,6 +10,7 @@ import android.os.Handler
 import android.os.Looper
 import androidx.core.content.ContextCompat
 
+@Suppress("DEPRECATION")
 class MaterialKeyboardView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null,
@@ -76,6 +77,7 @@ class MaterialKeyboardView @JvmOverloads constructor(
         112 to 48   // p -> 0
     )
 
+    @Deprecated("Using deprecated KeyboardView API")
     public override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         // drawCustomSpaceKey(canvas) // Temporarily disabled to fix black rectangle
@@ -188,6 +190,7 @@ class MaterialKeyboardView @JvmOverloads constructor(
         }
     }
 
+    @Deprecated("Using deprecated KeyboardView API")
     override fun onTouchEvent(me: MotionEvent?): Boolean {
         me?.let { event ->
             val keyboard = keyboard ?: return super.onTouchEvent(me)

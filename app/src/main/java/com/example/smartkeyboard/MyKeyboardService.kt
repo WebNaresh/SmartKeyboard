@@ -25,7 +25,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
 
+@Suppress("DEPRECATION")
 class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionListener {
 
     private var keyboardView: MaterialKeyboardView? = null
@@ -96,15 +98,18 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
     }
     
     // KeyboardView.OnKeyboardActionListener methods
+    @Deprecated("Using deprecated KeyboardView API")
     override fun onPress(primaryCode: Int) {
         // Called when a key is pressed - provide haptic feedback
         performHapticFeedback()
     }
-    
+
+    @Deprecated("Using deprecated KeyboardView API")
     override fun onRelease(primaryCode: Int) {
         // Called when a key is released
     }
-    
+
+    @Deprecated("Using deprecated KeyboardView API")
     override fun onKey(primaryCode: Int, keyCodes: IntArray?) {
         when (primaryCode) {
             Keyboard.KEYCODE_DELETE -> {
@@ -160,11 +165,13 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
                     // Handle space and other characters for auto suggestions
                     if (character == ' ') {
                         // Space ends current word, trigger final suggestion and reset
+                        Log.d(TAG, "Space pressed, current text: '${currentTypedText}'")
                         triggerAutoSuggestion()
                         currentTypedText.clear()
                     } else {
                         // Add character to current typed text for auto suggestions
                         currentTypedText.append(character)
+                        Log.d(TAG, "Character '$character' added, current text: '${currentTypedText}'")
                         triggerAutoSuggestion()
                     }
                 }
@@ -172,22 +179,27 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
         }
     }
     
+    @Deprecated("Using deprecated KeyboardView API")
     override fun onText(text: CharSequence?) {
         text?.let { handleTextInput(it.toString()) }
     }
-    
+
+    @Deprecated("Using deprecated KeyboardView API")
     override fun swipeLeft() {
         // Handle swipe left gesture
     }
-    
+
+    @Deprecated("Using deprecated KeyboardView API")
     override fun swipeRight() {
         // Handle swipe right gesture
     }
-    
+
+    @Deprecated("Using deprecated KeyboardView API")
     override fun swipeDown() {
         // Handle swipe down gesture
     }
-    
+
+    @Deprecated("Using deprecated KeyboardView API")
     override fun swipeUp() {
         // Handle swipe up gesture
     }
@@ -246,6 +258,8 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
         // Initialize AI by default
         initializeAIFromSettings()
         isAIEnabled = true
+
+        Log.d(TAG, "Keyboard initialized - AI enabled: $isAIEnabled, AI processor: ${aiTextProcessor != null}")
 
         updateMoodButtonsUI()
         updateMoodPillAppearance()
@@ -529,6 +543,9 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
 
             Log.d(TAG, "Enhancing text: '$currentText'")
 
+            // Show "AI is thinking" indicator when manually enhancing
+            showAIThinkingIndicator()
+
             // DON'T delete text immediately - keep it visible until response arrives
             // Always try to use AI enhancement first
             if (isAIEnabled && aiTextProcessor != null) {
@@ -539,6 +556,8 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
                 inputConnection.performContextMenuAction(android.R.id.selectAll)
                 val enhancedText = enhanceTextLocally(currentText)
                 inputConnection.commitText(enhancedText, 1)
+                // Hide thinking indicator after local enhancement
+                hideSuggestions()
             }
 
         } catch (e: Exception) {
@@ -574,6 +593,8 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
     private fun setupSuggestionBar(inputView: View) {
         suggestionScrollView = inputView.findViewById(R.id.suggestion_scroll_view)
         suggestionContainer = inputView.findViewById(R.id.suggestion_container)
+
+        Log.d(TAG, "Suggestion bar setup - ScrollView: ${suggestionScrollView != null}, Container: ${suggestionContainer != null}")
     }
 
     /**
@@ -584,14 +605,17 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
         suggestionJob?.cancel()
 
         val currentText = currentTypedText.toString().trim()
+        Log.d(TAG, "triggerAutoSuggestion called with text: '$currentText' (length: ${currentText.length})")
 
         // Only show suggestions for words with 2+ characters
         if (currentText.length >= 2) {
+            Log.d(TAG, "Text length >= 2, starting suggestion generation")
             suggestionJob = serviceScope.launch {
                 delay(300) // Debounce typing
                 generateAutoSuggestions(currentText)
             }
         } else {
+            Log.d(TAG, "Text too short, hiding suggestions")
             // Hide suggestions for short text
             hideSuggestions()
         }
@@ -602,7 +626,13 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
      */
     private suspend fun generateAutoSuggestions(text: String) {
         try {
+            Log.d(TAG, "Generating auto suggestions for: '$text'")
+
+            // Show "AI is thinking" indicator
+            showAIThinkingIndicator()
+
             if (!isAIEnabled || aiTextProcessor == null) {
+                Log.d(TAG, "AI not enabled, using local suggestions")
                 // Use local suggestions if AI is not available
                 generateLocalSuggestions(text)
                 return
@@ -615,18 +645,31 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
                 MoodType.NORMAL -> AITextProcessor.MoodType.NORMAL
             }
 
-            // Generate AI suggestions
-            val result = aiTextProcessor?.enhanceText(text, aiMood)
-            result?.fold(
-                onSuccess = { enhancedText ->
-                    // Show AI suggestion
-                    showSuggestions(listOf(enhancedText, text)) // Original text as fallback
-                },
-                onFailure = {
-                    // Fallback to local suggestions
-                    generateLocalSuggestions(text)
+            Log.d(TAG, "Using AI with mood: $currentMood")
+
+            // Generate AI suggestions with shorter timeout
+            try {
+                val result = withTimeout(2000L) { // 2 second timeout (shorter)
+                    aiTextProcessor!!.enhanceText(text, aiMood)
                 }
-            )
+
+                result.fold(
+                    onSuccess = { enhancedText ->
+                        Log.d(TAG, "AI suggestion generated: '$enhancedText'")
+                        // Show AI suggestion
+                        showSuggestions(listOf(enhancedText, text)) // Original text as fallback
+                    },
+                    onFailure = { error ->
+                        Log.e(TAG, "AI suggestion failed: ${error.message}")
+                        // Immediate fallback to simple suggestions
+                        showFallbackSuggestions(text)
+                    }
+                )
+            } catch (e: Exception) {
+                Log.w(TAG, "AI suggestion timed out or failed, using fallback: ${e.message}")
+                // Immediate fallback to simple suggestions
+                showFallbackSuggestions(text)
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Error generating auto suggestions", e)
             generateLocalSuggestions(text)
@@ -634,39 +677,13 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
     }
 
     /**
-     * Generate local suggestions based on mood (AI-powered when possible)
+     * Generate local suggestions based on mood (fallback only)
      */
     private fun generateLocalSuggestions(text: String) {
-        serviceScope.launch {
-            try {
-                if (isAIEnabled && aiTextProcessor != null) {
-                    // Try AI first even for local suggestions
-                    val aiMood = when (currentMood) {
-                        MoodType.RESPECTFUL -> AITextProcessor.MoodType.RESPECTFUL
-                        MoodType.FUNNY -> AITextProcessor.MoodType.FUNNY
-                        MoodType.ANGRY -> AITextProcessor.MoodType.ANGRY
-                        MoodType.NORMAL -> AITextProcessor.MoodType.NORMAL
-                    }
-
-                    val result = aiTextProcessor?.enhanceText(text, aiMood)
-                    result?.fold(
-                        onSuccess = { enhancedText ->
-                            showSuggestions(listOf(enhancedText, text))
-                        },
-                        onFailure = {
-                            // Only use string manipulation as last resort
-                            showFallbackSuggestions(text)
-                        }
-                    )
-                } else {
-                    // AI not available, use fallback
-                    showFallbackSuggestions(text)
-                }
-            } catch (e: Exception) {
-                Log.e(TAG, "Error in local suggestions", e)
-                showFallbackSuggestions(text)
-            }
-        }
+        Log.d(TAG, "Generating local fallback suggestions for: '$text'")
+        // Skip AI calls in local suggestions to avoid infinite loops
+        // Go directly to fallback suggestions
+        showFallbackSuggestions(text)
     }
 
     /**
@@ -675,22 +692,74 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
     private fun showFallbackSuggestions(text: String) {
         val suggestions = mutableListOf<String>()
 
-        // Add original text
+        // Add original text first
         suggestions.add(text)
 
-        // Add simple mood-based suggestion only as fallback
-        val moodSuggestion = when (currentMood) {
-            MoodType.RESPECTFUL -> "Please $text"
-            MoodType.FUNNY -> "$text 😄"
-            MoodType.ANGRY -> text.uppercase() + "!"
-            MoodType.NORMAL -> text.replaceFirstChar { it.uppercase() }
+        // Add better mood-based suggestions
+        when (currentMood) {
+            MoodType.RESPECTFUL -> {
+                when {
+                    text.contains("hi", ignoreCase = true) -> suggestions.add(0, "Hello! How are you?")
+                    text.contains("good", ignoreCase = true) -> suggestions.add(0, "Good day to you!")
+                    text.contains("want", ignoreCase = true) -> suggestions.add(0, text.replace("want", "would like", ignoreCase = true))
+                    text.length > 3 -> suggestions.add(0, "I would like to say: $text")
+                    else -> suggestions.add(0, text.replaceFirstChar { it.uppercase() })
+                }
+            }
+            MoodType.FUNNY -> {
+                when {
+                    text.contains("hi", ignoreCase = true) -> suggestions.add(0, "Hey there! 😄")
+                    text.contains("good", ignoreCase = true) -> suggestions.add(0, "$text and awesome! 🎉")
+                    text.length > 3 -> suggestions.add(0, "$text 😊")
+                    else -> suggestions.add(0, "$text 😄")
+                }
+            }
+            MoodType.ANGRY -> {
+                suggestions.add(0, text.uppercase() + "!")
+            }
+            MoodType.NORMAL -> {
+                suggestions.add(0, text.replaceFirstChar { it.uppercase() })
+            }
         }
 
-        if (moodSuggestion != text) {
-            suggestions.add(0, moodSuggestion)
-        }
+        // Remove duplicates while preserving order
+        val uniqueSuggestions = suggestions.distinct()
+        showSuggestions(uniqueSuggestions)
+    }
 
-        showSuggestions(suggestions)
+    /**
+     * Show "AI is thinking" indicator with auto-timeout
+     */
+    private fun showAIThinkingIndicator() {
+        runOnUiThread {
+            suggestionContainer?.removeAllViews()
+
+            // Create thinking indicator
+            val thinkingView = TextView(this).apply {
+                text = "🤖 AI is thinking..."
+                textSize = 14f
+                setTextColor(ContextCompat.getColor(this@MyKeyboardService, android.R.color.white))
+                background = ContextCompat.getDrawable(this@MyKeyboardService, R.drawable.suggestion_chip_bg)
+                setPadding(24, 12, 24, 12)
+                alpha = 0.7f
+            }
+
+            suggestionContainer?.addView(thinkingView)
+            suggestionScrollView?.visibility = View.VISIBLE
+
+            // Auto-hide thinking indicator after 3 seconds as safety net
+            serviceScope.launch {
+                delay(3000)
+                // Check if still showing thinking indicator
+                runOnUiThread {
+                    if (suggestionContainer?.childCount == 1 &&
+                        (suggestionContainer?.getChildAt(0) as? TextView)?.text?.contains("thinking") == true) {
+                        Log.w(TAG, "AI thinking indicator timed out, showing fallback")
+                        showFallbackSuggestions(currentTypedText.toString())
+                    }
+                }
+            }
+        }
     }
 
     /**
@@ -698,6 +767,7 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
      */
     private fun showSuggestions(suggestions: List<String>) {
         runOnUiThread {
+            Log.d(TAG, "Showing ${suggestions.size} suggestions: $suggestions")
             suggestionContainer?.removeAllViews()
 
             suggestions.take(3).forEach { suggestion -> // Limit to 3 suggestions
