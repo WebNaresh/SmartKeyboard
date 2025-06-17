@@ -78,8 +78,8 @@
             android:keyPreviewOffset="-10dp"
             android:keyPreviewHeight="60dp"
             android:paddingHorizontal="1dp"
-            android:paddingTop="8dp"
-            android:paddingBottom="16dp"
+            android:paddingTop="1dp"
+            android:paddingBottom="2dp"
             android:clipToPadding="false" />
 
     </LinearLayout>

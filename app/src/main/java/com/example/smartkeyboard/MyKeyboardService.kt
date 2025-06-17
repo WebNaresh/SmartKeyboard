@@ -160,7 +160,7 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
     override fun swipeUp() {
         // Handle swipe up gesture
     }
-    
+
     private fun handleShift() {
         if (keyboard != null) {
             isShifted = !keyboard!!.isShifted
@@ -575,7 +575,7 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
     /**
      * Provide haptic feedback for key presses
      */
-    private fun performHapticFeedback() {
+    fun performHapticFeedback() {
         try {
             vibrator?.let { vib ->
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
