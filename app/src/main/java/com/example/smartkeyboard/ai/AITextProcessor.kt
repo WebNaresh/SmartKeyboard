@@ -173,80 +173,127 @@ class AITextProcessor(private val apiKey: String) {
     }
 
     /**
-     * Generate mock AI enhancement for demo purposes
+     * Generate suggestions using OpenAI API for what user might type next
      */
-    private fun generateMockEnhancement(text: String, mood: MoodType): String {
-        val words = text.trim().split("\\s+".toRegex())
+    suspend fun generateSuggestions(text: String, mood: MoodType): Result<List<String>> = withContext(Dispatchers.IO) {
+        try {
+            if (text.isBlank()) {
+                return@withContext Result.success(listOf(text))
+            }
 
-        return when (mood) {
+            // Check if we have a real API key
+            if (isMockMode || apiKey == "mock-key-for-demo") {
+                Log.d(TAG, "No API key provided (key: '$apiKey'), using simple fallback suggestions for mood: $mood")
+                val suggestions = generateSimpleFallback(text, mood)
+                Log.d(TAG, "Fallback suggestions generated: $suggestions")
+                return@withContext Result.success(suggestions)
+            }
+
+            // Real OpenAI API processing for suggestions
+            val systemPrompt = buildSuggestionSystemPrompt(mood)
+            val userPrompt = """
+The user is typing a message and has written: '$text'. Provide 3 different ways to COMPLETE or CONTINUE this message. Do NOT respond to the message - instead suggest how the user can finish typing their own message. Consider the ${mood.name.lowercase()} tone. Return only the complete message suggestions, one per line, without numbers or formatting. If mood is respectful, avoid framing completions as questions and do not start with phrases like 'may I', 'could you', or 'would it be possible'. Keep the language respectful, but clear and assertive.
+""".trimIndent()
+
+            val request = ChatCompletionRequest(
+                model = "gpt-3.5-turbo",
+                messages = listOf(
+                    ChatMessage("system", systemPrompt),
+                    ChatMessage("user", userPrompt)
+                ),
+                maxTokens = 150,
+                temperature = 0.8 // Higher temperature for more creative suggestions
+            )
+
+            val response = openAIService!!.createChatCompletion(
+                authorization = "${OpenAIService.BEARER_PREFIX}$apiKey",
+                request = request
+            )
+
+            if (response.isSuccessful) {
+                val chatResponse = response.body()
+                val suggestionsText = chatResponse?.choices?.firstOrNull()?.message?.content?.trim()
+
+                if (suggestionsText.isNullOrBlank()) {
+                    Log.w(TAG, "Empty suggestions from OpenAI API")
+                    Result.success(generateSimpleFallback(text, mood))
+                } else {
+                    // Parse suggestions from AI response
+                    val suggestions = parseSuggestions(suggestionsText, text)
+                    Log.d(TAG, "OpenAI API suggestions: $suggestions")
+                    Result.success(suggestions)
+                }
+            } else {
+                val errorMsg = "OpenAI API error: ${response.code()} - ${response.message()}"
+                Log.e(TAG, errorMsg)
+                Result.failure(Exception(errorMsg))
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error calling OpenAI API", e)
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Generate simple fallback suggestions when no API key is available
+     */
+    private fun generateSimpleFallback(text: String, mood: MoodType): List<String> {
+        val suggestions = mutableListOf<String>()
+
+        // Always include original text
+        suggestions.add(text)
+
+        // Add simple mood-based variations (no hardcoded responses)
+        when (mood) {
             MoodType.RESPECTFUL -> {
-                when {
-                    text.contains("hi", ignoreCase = true) && text.contains("want", ignoreCase = true) ->
-                        "Hello! I would be grateful if you could share your contact number with me."
-                    text.contains("hi", ignoreCase = true) && text.contains("sir", ignoreCase = true) && text.contains("good", ignoreCase = true) ->
-                        "Good morning, sir! I hope you're having a wonderful day."
-                    text.contains("hi", ignoreCase = true) ->
-                        "Hello! How are you doing today?"
-                    text.contains("hello", ignoreCase = true) ->
-                        "Good day! I hope you're doing well."
-                    text.contains("thanks", ignoreCase = true) ->
-                        "Thank you very much for your assistance."
-                    text.contains("please", ignoreCase = true) ->
-                        "I would be most grateful if you could help with: $text"
-                    text.contains("need", ignoreCase = true) ->
-                        text.replace("need", "would appreciate", ignoreCase = true)
-                    text.contains("want", ignoreCase = true) ->
-                        text.replace("want", "would like", ignoreCase = true)
-                    text.contains("good", ignoreCase = true) ->
-                        "Good day to you!"
-                    words.size <= 2 -> text.replaceFirstChar { it.uppercase() }
-                    else -> "I would like to respectfully say: $text"
+                // Make it more polite and respectful
+                val respectful = text.replaceFirstChar { it.uppercase() }
+
+                // Add "please" if it's a request-like message
+                if (text.contains("can you", ignoreCase = true) ||
+                    text.contains("could you", ignoreCase = true) ||
+                    text.contains("would you", ignoreCase = true)) {
+                    suggestions.add("$respectful, please")
+                } else if (!respectful.endsWith(".") && !respectful.endsWith("!") && !respectful.endsWith("?")) {
+                    suggestions.add("$respectful.")
+                } else {
+                    suggestions.add(respectful)
+                }
+
+                // Add a more formal version
+                if (text.length > 5) {
+                    suggestions.add("I would like to say: $respectful")
                 }
             }
             MoodType.FUNNY -> {
-                when {
-                    text.contains("hi", ignoreCase = true) ->
-                        "Hey there! 😄 What's cooking?"
-                    text.contains("hello", ignoreCase = true) ->
-                        "Well hello there, sunshine! ☀️"
-                    text.contains("thanks", ignoreCase = true) ->
-                        "Thanks a million! You're awesome! 🎉"
-                    text.contains("good", ignoreCase = true) ->
-                        text.replace("good", "absolutely fantastic", ignoreCase = true) + " 😊"
-                    text.contains("ok", ignoreCase = true) ->
-                        "Okey dokey! 👍"
-                    words.size <= 2 -> "$text 😄"
-                    else -> "$text (and I'm not even kidding!) 😉"
+                suggestions.add("$text 😄")
+                if (text.length > 3) {
+                    suggestions.add("$text (and I'm having fun!) 🎉")
                 }
             }
             MoodType.ANGRY -> {
-                when {
-                    text.contains("please", ignoreCase = true) ->
-                        text.replace("please", "I NEED you to", ignoreCase = true)
-                    text.contains("want", ignoreCase = true) ->
-                        text.replace("want", "DEMAND", ignoreCase = true)
-                    text.contains("need", ignoreCase = true) ->
-                        text.replace("need", "REQUIRE", ignoreCase = true).uppercase()
-                    words.size <= 2 -> text.uppercase() + "!"
-                    else -> "Listen up: $text!"
+                suggestions.add(text.uppercase() + "!")
+                if (text.length > 3) {
+                    suggestions.add("Listen: ${text.uppercase()}!")
                 }
             }
             MoodType.NORMAL -> {
-                when {
-                    text.contains("hi", ignoreCase = true) && text.contains("want", ignoreCase = true) ->
-                        "Hi there! Could I get your number please?"
-                    text.contains("u", ignoreCase = true) ->
-                        text.replace("u", "you", ignoreCase = true)
-                    text.contains("ur", ignoreCase = true) ->
-                        text.replace("ur", "your", ignoreCase = true)
-                    text.contains("thx", ignoreCase = true) ->
-                        text.replace("thx", "thanks", ignoreCase = true)
-                    !text.endsWith(".") && !text.endsWith("!") && !text.endsWith("?") ->
-                        "$text."
-                    else -> text
+                suggestions.add(text.replaceFirstChar { it.uppercase() })
+                if (!text.endsWith(".") && !text.endsWith("!") && !text.endsWith("?") && text.length > 3) {
+                    suggestions.add("${text.replaceFirstChar { it.uppercase() }}.")
                 }
             }
         }
+
+        return suggestions.take(3).distinct() // Remove duplicates and limit to 3
+    }
+
+    /**
+     * Generate simple enhancement when no API key is available
+     */
+    private fun generateMockEnhancement(text: String, mood: MoodType): String {
+        // For single enhancement, just return the first fallback suggestion
+        return generateSimpleFallback(text, mood).firstOrNull() ?: text
     }
 
     /**
@@ -317,11 +364,72 @@ class AITextProcessor(private val apiKey: String) {
     
     private fun buildUserPrompt(text: String, mood: MoodType): String {
         return when (mood) {
-            MoodType.RESPECTFUL -> "Please make this text more respectful and polite: $text"
-            MoodType.FUNNY -> "Please make this text more fun and humorous: $text"
-            MoodType.ANGRY -> "Please make this text more assertive and emphatic: $text"
-            MoodType.NORMAL -> "Please improve this text: $text"
+            MoodType.RESPECTFUL -> "Please enhance and improve this message to be more respectful and polite: $text"
+            MoodType.FUNNY -> "Please enhance and improve this message to be more fun and humorous: $text"
+            MoodType.ANGRY -> "Please enhance and improve this message to be more assertive and emphatic: $text"
+            MoodType.NORMAL -> "Please enhance and improve this message: $text"
         }
+    }
+
+    private fun buildSuggestionSystemPrompt(mood: MoodType): String {
+        val basePrompt = """
+            You are a smart keyboard text completion assistant. Your job is to help users complete their messages.
+            When given partial text that a user is typing, suggest 3 different ways to COMPLETE or CONTINUE that text.
+            DO NOT respond to the message or have a conversation - only suggest how to finish the user's own message.
+
+            Example:
+            User typing: "hi good morning"
+            Your suggestions:
+            - "hi good morning! how are you today?"
+            - "hi good morning, hope you're doing well"
+            - "hi good morning! ready for the day?"
+
+            IMPORTANT: Return only the complete suggested messages, one per line, without numbers, bullets, or formatting.
+        """.trimIndent()
+
+        val moodPrompt = when (mood) {
+            MoodType.RESPECTFUL -> """
+                Complete the user's message in a polite, respectful, and professional way.
+                Add courteous language and formal tone where appropriate to finish their message.
+            """.trimIndent()
+
+            MoodType.FUNNY -> """
+                Complete the user's message in a humorous and playful way while keeping it appropriate.
+                Add light humor, wordplay, or fun expressions to finish their message.
+            """.trimIndent()
+
+            MoodType.ANGRY -> """
+                Complete the user's message in a more assertive and emphatic way while keeping it professional.
+                Use strong but appropriate language to finish their message with determination.
+            """.trimIndent()
+
+            MoodType.NORMAL -> """
+                Complete the user's message in a clear, natural, and conversational way.
+                Focus on common ways people would finish such messages.
+            """.trimIndent()
+        }
+
+        return "$basePrompt\n\n$moodPrompt"
+    }
+
+    private fun parseSuggestions(suggestionsText: String, originalText: String): List<String> {
+        val suggestions = mutableListOf<String>()
+
+        // Split by lines and clean up
+        val lines = suggestionsText.split("\n")
+            .map { it.trim() }
+            .filter { it.isNotBlank() }
+            .map { cleanResponseText(it) }
+
+        // Add parsed suggestions
+        suggestions.addAll(lines.take(3))
+
+        // Always include original text as fallback if we don't have enough suggestions
+        if (!suggestions.contains(originalText)) {
+            suggestions.add(originalText)
+        }
+
+        return suggestions.take(3) // Limit to 3 suggestions
     }
 
     /**

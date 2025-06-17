@@ -46,7 +46,7 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
     // Auto suggestion components
     private var suggestionScrollView: HorizontalScrollView? = null
     private var suggestionContainer: LinearLayout? = null
-    private var currentTypedText = StringBuilder()
+    private var currentTypedText = StringBuilder() // Tracks the full sentence context
     private var suggestionJob: Job? = null
 
     // AI integration
@@ -138,6 +138,10 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
                         android.view.KeyEvent.KEYCODE_ENTER
                     )
                 )
+
+                // Clear sentence context on Enter
+                currentTypedText.clear()
+                hideSuggestions()
             }
             Keyboard.KEYCODE_SHIFT -> {
                 // Handle shift key
@@ -164,15 +168,28 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
 
                     // Handle space and other characters for auto suggestions
                     if (character == ' ') {
-                        // Space ends current word, trigger final suggestion and reset
+                        // Add space to maintain full sentence context
+                        currentTypedText.append(character)
                         Log.d(TAG, "Space pressed, current text: '${currentTypedText}'")
                         triggerAutoSuggestion()
-                        currentTypedText.clear()
                     } else {
                         // Add character to current typed text for auto suggestions
                         currentTypedText.append(character)
                         Log.d(TAG, "Character '$character' added, current text: '${currentTypedText}'")
-                        triggerAutoSuggestion()
+
+                        // Clear context on sentence-ending punctuation
+                        if (character == '.' || character == '!' || character == '?') {
+                            Log.d(TAG, "Sentence ending detected, will clear context after suggestions")
+                            triggerAutoSuggestion()
+                            // Clear context after a short delay to allow suggestions to be generated
+                            serviceScope.launch {
+                                delay(500)
+                                currentTypedText.clear()
+                                hideSuggestions()
+                            }
+                        } else {
+                            triggerAutoSuggestion()
+                        }
                     }
                 }
             }
@@ -342,65 +359,23 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
     }
 
     private fun transformToRespectful(text: String): String {
-        // Simple respectful transformations
-        return when (text.lowercase()) {
-            "no" -> "I respectfully disagree"
-            "yes" -> "I would be honored to"
-            "ok" -> "Certainly"
-            "thanks" -> "Thank you very much"
-            "hi" -> "Good day"
-            "bye" -> "Have a wonderful day"
-            else -> {
-                // Add respectful modifiers to sentences
-                if (text.endsWith(".") || text.endsWith("!")) {
-                    text.dropLast(1) + ", if I may say so."
-                } else {
-                    text
-                }
-            }
+        // Simple fallback: just capitalize and add period if needed
+        val respectful = text.replaceFirstChar { it.uppercase() }
+        return if (!respectful.endsWith(".") && !respectful.endsWith("!") && !respectful.endsWith("?")) {
+            "$respectful."
+        } else {
+            respectful
         }
     }
 
     private fun transformToFunny(text: String): String {
-        // Simple funny transformations
-        return when (text.lowercase()) {
-            "hello" -> "Howdy partner! 🤠"
-            "yes" -> "Absolutely-positively! 😄"
-            "no" -> "Nope-a-dope! 😅"
-            "ok" -> "Okey-dokey! 👍"
-            "thanks" -> "Thanks a bunch! 🙌"
-            "bye" -> "See ya later, alligator! 🐊"
-            else -> {
-                // Add funny emojis or expressions
-                if (text.endsWith(".")) {
-                    text.dropLast(1) + "! 😂"
-                } else if (text.endsWith("!")) {
-                    text + " 🎉"
-                } else {
-                    text
-                }
-            }
-        }
+        // Simple fallback: add emoji
+        return "$text 😄"
     }
 
     private fun transformToAngry(text: String): String {
-        // Simple angry transformations (keeping it appropriate)
-        return when (text.lowercase()) {
-            "hello" -> "WHAT?!"
-            "yes" -> "FINE!"
-            "no" -> "ABSOLUTELY NOT!"
-            "ok" -> "WHATEVER!"
-            "thanks" -> "About time!"
-            "bye" -> "GOOD RIDDANCE!"
-            else -> {
-                // Convert to uppercase for emphasis
-                if (text.length > 1) {
-                    text.uppercase() + "!"
-                } else {
-                    text.uppercase()
-                }
-            }
-        }
+        // Simple fallback: uppercase with exclamation
+        return text.uppercase() + "!"
     }
 
     private fun updateMoodPillAppearance() {
@@ -607,11 +582,11 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
         val currentText = currentTypedText.toString().trim()
         Log.d(TAG, "triggerAutoSuggestion called with text: '$currentText' (length: ${currentText.length})")
 
-        // Only show suggestions for words with 2+ characters
-        if (currentText.length >= 2) {
-            Log.d(TAG, "Text length >= 2, starting suggestion generation")
+        // Show suggestions for text with 3+ characters (better for full sentences)
+        if (currentText.length >= 3) {
+            Log.d(TAG, "Text length >= 3, starting suggestion generation")
             suggestionJob = serviceScope.launch {
-                delay(300) // Debounce typing
+                delay(500) // Slightly longer debounce for full sentences
                 generateAutoSuggestions(currentText)
             }
         } else {
@@ -645,28 +620,28 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
                 MoodType.NORMAL -> AITextProcessor.MoodType.NORMAL
             }
 
-            Log.d(TAG, "Using AI with mood: $currentMood")
+            Log.d(TAG, "Using AI with mood: $currentMood -> $aiMood for text: '$text'")
 
             // Generate AI suggestions with shorter timeout
             try {
-                val result = withTimeout(2000L) { // 2 second timeout (shorter)
-                    aiTextProcessor!!.enhanceText(text, aiMood)
+                val result = withTimeout(3000L) { // 3 second timeout for suggestions
+                    aiTextProcessor!!.generateSuggestions(text, aiMood)
                 }
 
                 result.fold(
-                    onSuccess = { enhancedText ->
-                        Log.d(TAG, "AI suggestion generated: '$enhancedText'")
-                        // Show AI suggestion
-                        showSuggestions(listOf(enhancedText, text)) // Original text as fallback
+                    onSuccess = { suggestions ->
+                        Log.d(TAG, "AI suggestions generated: $suggestions")
+                        // Show AI suggestions
+                        showSuggestions(suggestions)
                     },
                     onFailure = { error ->
-                        Log.e(TAG, "AI suggestion failed: ${error.message}")
+                        Log.e(TAG, "AI suggestions failed: ${error.message}")
                         // Immediate fallback to simple suggestions
                         showFallbackSuggestions(text)
                     }
                 )
             } catch (e: Exception) {
-                Log.w(TAG, "AI suggestion timed out or failed, using fallback: ${e.message}")
+                Log.w(TAG, "AI suggestions timed out or failed, using fallback: ${e.message}")
                 // Immediate fallback to simple suggestions
                 showFallbackSuggestions(text)
             }
@@ -687,7 +662,7 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
     }
 
     /**
-     * Show fallback suggestions when AI is not available
+     * Show simple fallback suggestions when AI is not available
      */
     private fun showFallbackSuggestions(text: String) {
         val suggestions = mutableListOf<String>()
@@ -695,30 +670,30 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
         // Add original text first
         suggestions.add(text)
 
-        // Add better mood-based suggestions
+        // Add simple mood-based variations (no hardcoded responses)
         when (currentMood) {
             MoodType.RESPECTFUL -> {
-                when {
-                    text.contains("hi", ignoreCase = true) -> suggestions.add(0, "Hello! How are you?")
-                    text.contains("good", ignoreCase = true) -> suggestions.add(0, "Good day to you!")
-                    text.contains("want", ignoreCase = true) -> suggestions.add(0, text.replace("want", "would like", ignoreCase = true))
-                    text.length > 3 -> suggestions.add(0, "I would like to say: $text")
-                    else -> suggestions.add(0, text.replaceFirstChar { it.uppercase() })
+                val respectful = text.replaceFirstChar { it.uppercase() }
+
+                // Add "please" if it's a request-like message
+                if (text.contains("can you", ignoreCase = true) ||
+                    text.contains("could you", ignoreCase = true) ||
+                    text.contains("would you", ignoreCase = true)) {
+                    suggestions.add("$respectful, please")
+                } else if (!respectful.endsWith(".") && !respectful.endsWith("!") && !respectful.endsWith("?")) {
+                    suggestions.add("$respectful.")
+                } else {
+                    suggestions.add(respectful)
                 }
             }
             MoodType.FUNNY -> {
-                when {
-                    text.contains("hi", ignoreCase = true) -> suggestions.add(0, "Hey there! 😄")
-                    text.contains("good", ignoreCase = true) -> suggestions.add(0, "$text and awesome! 🎉")
-                    text.length > 3 -> suggestions.add(0, "$text 😊")
-                    else -> suggestions.add(0, "$text 😄")
-                }
+                suggestions.add("$text 😄")
             }
             MoodType.ANGRY -> {
-                suggestions.add(0, text.uppercase() + "!")
+                suggestions.add(text.uppercase() + "!")
             }
             MoodType.NORMAL -> {
-                suggestions.add(0, text.replaceFirstChar { it.uppercase() })
+                suggestions.add(text.replaceFirstChar { it.uppercase() })
             }
         }
 
@@ -826,7 +801,7 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
         val inputConnection = currentInputConnection ?: return
 
         try {
-            // Delete the current typed text
+            // Delete the current typed text (full sentence context)
             inputConnection.deleteSurroundingText(currentTypedText.length, 0)
 
             // Insert the suggestion
@@ -837,6 +812,8 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
             hideSuggestions()
 
             performHapticFeedback()
+
+            Log.d(TAG, "Applied suggestion: '$suggestion'")
         } catch (e: Exception) {
             Log.e(TAG, "Error applying suggestion", e)
         }
