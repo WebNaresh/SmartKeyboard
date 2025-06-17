@@ -40,7 +40,7 @@
         <Key android:codes="-5" android:keyLabel="⌫" android:keyWidth="15%p" android:isRepeatable="true" android:keyEdgeFlags="right" />
     </Row>
     <Row android:rowEdgeFlags="bottom" android:keyHeight="56dp">
-        <Key android:codes="63" android:keyLabel="sym" android:keyWidth="15%p" android:keyEdgeFlags="left" />
+        <Key android:codes="63" android:keyLabel="?" android:keyWidth="15%p" android:keyEdgeFlags="left" />
         <Key android:codes="44" android:keyLabel="," android:keyWidth="10%p" />
         <Key android:codes="32" android:keyLabel="" android:keyWidth="50%p" android:isRepeatable="true" />
         <Key android:codes="46" android:keyLabel="." android:keyWidth="10%p" />

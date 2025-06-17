@@ -65,6 +65,30 @@
 
         </RelativeLayout>
 
+        <!-- Auto Suggestion Bar -->
+        <HorizontalScrollView
+            android:id="@+id/suggestion_scroll_view"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:background="#FF1E1E2E"
+            android:scrollbars="none"
+            android:visibility="gone"
+            android:layout_marginBottom="8dp">
+
+            <LinearLayout
+                android:id="@+id/suggestion_container"
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
+                android:orientation="horizontal"
+                android:paddingHorizontal="12dp"
+                android:gravity="center_vertical">
+
+                <!-- Suggestions will be added dynamically here -->
+
+            </LinearLayout>
+
+        </HorizontalScrollView>
+
         <!-- Main Keyboard View (Material You Style) -->
         <com.example.smartkeyboard.MaterialKeyboardView
             android:id="@+id/keyboard_view"
@@ -83,6 +107,17 @@
             android:clipToPadding="false" />
 
     </LinearLayout>
+
+    <!-- Overlay for click-outside-to-close (covers upper area around mood dialog) -->
+    <View
+        android:id="@+id/mood_overlay"
+        android:layout_width="match_parent"
+        android:layout_height="200dp"
+        android:layout_marginTop="56dp"
+        android:background="@android:color/transparent"
+        android:visibility="gone"
+        android:clickable="true"
+        android:focusable="true" />
 
     <!-- Floating Mood Selection Menu (Overlay) -->
     <LinearLayout

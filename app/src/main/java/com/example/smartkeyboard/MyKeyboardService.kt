@@ -16,10 +16,14 @@ import android.os.Vibrator
 import android.os.VibrationEffect
 import android.os.Build
 import android.content.Context
+import android.graphics.Color
+import android.widget.HorizontalScrollView
+import androidx.core.content.ContextCompat
 import com.example.smartkeyboard.ai.AITextProcessor
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionListener {
@@ -29,12 +33,19 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
 
     // Mood selection state
     private var moodButtonsContainer: LinearLayout? = null
+    private var moodOverlay: View? = null
     private var btnRespectful: LinearLayout? = null
     private var btnFunny: LinearLayout? = null
     private var btnAngry: LinearLayout? = null
     private var moodSelectorPill: FrameLayout? = null
     private var moodEmoji: TextView? = null
     private var btnEnhanceText: FrameLayout? = null
+
+    // Auto suggestion components
+    private var suggestionScrollView: HorizontalScrollView? = null
+    private var suggestionContainer: LinearLayout? = null
+    private var currentTypedText = StringBuilder()
+    private var suggestionJob: Job? = null
 
     // AI integration
     private var aiTextProcessor: AITextProcessor? = null
@@ -65,6 +76,9 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
 
         // Initialize mood buttons
         setupMoodButtons(inputView)
+
+        // Initialize suggestion bar
+        setupSuggestionBar(inputView)
 
         return inputView
     }
@@ -97,6 +111,12 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
                 // Handle backspace
                 val inputConnection = currentInputConnection
                 inputConnection?.deleteSurroundingText(1, 0)
+
+                // Remove last character from typed text and update suggestions
+                if (currentTypedText.isNotEmpty()) {
+                    currentTypedText.deleteCharAt(currentTypedText.length - 1)
+                    triggerAutoSuggestion()
+                }
             }
             Keyboard.KEYCODE_DONE -> {
                 // Handle enter/done
@@ -136,6 +156,17 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
                     // Mood transformation only applies when using the enhance button
                     val inputConnection = currentInputConnection
                     inputConnection?.commitText(character.toString(), 1)
+
+                    // Handle space and other characters for auto suggestions
+                    if (character == ' ') {
+                        // Space ends current word, trigger final suggestion and reset
+                        triggerAutoSuggestion()
+                        currentTypedText.clear()
+                    } else {
+                        // Add character to current typed text for auto suggestions
+                        currentTypedText.append(character)
+                        triggerAutoSuggestion()
+                    }
                 }
             }
         }
@@ -171,6 +202,7 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
 
     private fun setupMoodButtons(inputView: View) {
         moodButtonsContainer = inputView.findViewById(R.id.mood_buttons_container)
+        moodOverlay = inputView.findViewById(R.id.mood_overlay)
         moodSelectorPill = inputView.findViewById<FrameLayout>(R.id.mood_selector_pill)
         moodEmoji = inputView.findViewById<TextView>(R.id.mood_emoji)
         btnRespectful = inputView.findViewById<LinearLayout>(R.id.btn_respectful)
@@ -200,8 +232,16 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
             enhanceCurrentText()
         }
 
-        // Initially hide mood buttons
+        // Click outside to close mood dialog
+        moodOverlay?.setOnClickListener {
+            if (moodButtonsVisible) {
+                toggleMoodButtonsVisibility()
+            }
+        }
+
+        // Initially hide mood buttons and overlay
         moodButtonsContainer?.visibility = View.GONE
+        moodOverlay?.visibility = View.GONE
 
         // Initialize AI by default
         initializeAIFromSettings()
@@ -241,6 +281,7 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
 
         if (moodButtonsVisible) {
             // Show with animation
+            moodOverlay?.visibility = View.VISIBLE
             moodButtonsContainer?.visibility = View.VISIBLE
             val scaleInAnimation = AnimationUtils.loadAnimation(this, R.anim.mood_menu_scale_in)
             moodButtonsContainer?.startAnimation(scaleInAnimation)
@@ -252,6 +293,7 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
                 override fun onAnimationRepeat(animation: android.view.animation.Animation?) {}
                 override fun onAnimationEnd(animation: android.view.animation.Animation?) {
                     moodButtonsContainer?.visibility = View.GONE
+                    moodOverlay?.visibility = View.GONE
                 }
             })
             moodButtonsContainer?.startAnimation(scaleOutAnimation)
@@ -368,6 +410,24 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
         val apiKey = SettingsActivity.getApiKey(this)
         if (!apiKey.isNullOrBlank()) {
             initializeAI(apiKey)
+        } else {
+            // Enable mock AI for demo purposes when no API key is configured
+            initializeMockAI()
+        }
+    }
+
+    /**
+     * Initialize mock AI for demo purposes (no API key required)
+     */
+    private fun initializeMockAI() {
+        try {
+            // Create a mock AI processor that doesn't require API key
+            aiTextProcessor = AITextProcessor("mock-key-for-demo")
+            isAIEnabled = true
+            Log.d(TAG, "Mock AI processor initialized for demo")
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to initialize mock AI processor", e)
+            isAIEnabled = false
         }
     }
 
@@ -470,12 +530,12 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
             Log.d(TAG, "Enhancing text: '$currentText'")
 
             // DON'T delete text immediately - keep it visible until response arrives
-            // Enhance the text based on current settings
+            // Always try to use AI enhancement first
             if (isAIEnabled && aiTextProcessor != null) {
                 // Use AI enhancement - text will be replaced when response arrives
                 enhanceTextWithAI(currentText)
             } else {
-                // Use local mood transformation - replace immediately since it's instant
+                // If AI is not available, use simple enhancement
                 inputConnection.performContextMenuAction(android.R.id.selectAll)
                 val enhancedText = enhanceTextLocally(currentText)
                 inputConnection.commitText(enhancedText, 1)
@@ -487,80 +547,16 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
     }
 
     /**
-     * Enhance text using local mood transformations for longer text
+     * Enhance text using AI (replaces old local mood transformations)
      */
     private fun enhanceTextLocally(text: String): String {
+        // This function is now deprecated - we use AI for all enhancements
+        // Only used as fallback when AI completely fails
         return when (currentMood) {
-            MoodType.RESPECTFUL -> enhanceRespectfully(text)
-            MoodType.FUNNY -> enhanceFunnily(text)
-            MoodType.ANGRY -> enhanceAngrily(text)
-            MoodType.NORMAL -> enhanceNormally(text)
-        }
-    }
-
-    private fun enhanceRespectfully(text: String): String {
-        val lowerText = text.lowercase().trim()
-        return when {
-            lowerText.contains("want") && lowerText.contains("number") ->
-                "I would be honored to have your contact number, if you don't mind."
-            lowerText.startsWith("hi") || lowerText.startsWith("hello") ->
-                "Good day, ${text.substringAfter(" ").ifBlank { "sir/madam" }}. ${text.substringAfter("hi").substringAfter("hello").trim()}"
-            lowerText.contains("help") ->
-                "I would greatly appreciate your assistance with this matter."
-            lowerText.contains("thanks") || lowerText.contains("thank") ->
-                "I am deeply grateful for your time and consideration."
-            lowerText.contains("sorry") ->
-                "I sincerely apologize for any inconvenience caused."
-            else -> "I hope you don't mind, but $text"
-        }
-    }
-
-    private fun enhanceFunnily(text: String): String {
-        val lowerText = text.lowercase().trim()
-        return when {
-            lowerText.contains("want") && lowerText.contains("number") ->
-                "Hey there! Could I snag your digits? 📱😄"
-            lowerText.startsWith("hi") || lowerText.startsWith("hello") ->
-                "Howdy partner! 🤠 What's cooking?"
-            lowerText.contains("help") ->
-                "SOS! I need a superhero! 🦸‍♂️ Can you save the day?"
-            lowerText.contains("thanks") || lowerText.contains("thank") ->
-                "You're absolutely amazing! Thanks a million! 🙌✨"
-            lowerText.contains("sorry") ->
-                "Oopsie daisy! My bad! 😅🤷‍♂️"
-            else -> "$text (but make it fun! 🎉)"
-        }
-    }
-
-    private fun enhanceAngrily(text: String): String {
-        val lowerText = text.lowercase().trim()
-        return when {
-            lowerText.contains("want") && lowerText.contains("number") ->
-                "I NEED YOUR NUMBER RIGHT NOW!"
-            lowerText.startsWith("hi") || lowerText.startsWith("hello") ->
-                "WHAT'S UP?! ${text.substringAfter(" ").uppercase()}"
-            lowerText.contains("help") ->
-                "I REQUIRE IMMEDIATE ASSISTANCE!"
-            lowerText.contains("thanks") || lowerText.contains("thank") ->
-                "FINALLY! About time!"
-            lowerText.contains("sorry") ->
-                "YOU BETTER BE SORRY!"
-            else -> text.uppercase() + "!"
-        }
-    }
-
-    private fun enhanceNormally(text: String): String {
-        // Just clean up the text - capitalize first letter, add period if needed
-        val cleaned = text.trim()
-        return if (cleaned.isNotEmpty()) {
-            val capitalized = cleaned.first().uppercase() + cleaned.drop(1)
-            if (capitalized.endsWith(".") || capitalized.endsWith("!") || capitalized.endsWith("?")) {
-                capitalized
-            } else {
-                "$capitalized."
-            }
-        } else {
-            text
+            MoodType.RESPECTFUL -> "Please $text"
+            MoodType.FUNNY -> "$text 😄"
+            MoodType.ANGRY -> text.uppercase() + "!"
+            MoodType.NORMAL -> text.replaceFirstChar { it.uppercase() }
         }
     }
 
@@ -570,6 +566,219 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
     private fun commitText(text: String) {
         val inputConnection = currentInputConnection
         inputConnection?.commitText(text, 1)
+    }
+
+    /**
+     * Setup suggestion bar components
+     */
+    private fun setupSuggestionBar(inputView: View) {
+        suggestionScrollView = inputView.findViewById(R.id.suggestion_scroll_view)
+        suggestionContainer = inputView.findViewById(R.id.suggestion_container)
+    }
+
+    /**
+     * Trigger automatic suggestion generation
+     */
+    private fun triggerAutoSuggestion() {
+        // Cancel previous suggestion job
+        suggestionJob?.cancel()
+
+        val currentText = currentTypedText.toString().trim()
+
+        // Only show suggestions for words with 2+ characters
+        if (currentText.length >= 2) {
+            suggestionJob = serviceScope.launch {
+                delay(300) // Debounce typing
+                generateAutoSuggestions(currentText)
+            }
+        } else {
+            // Hide suggestions for short text
+            hideSuggestions()
+        }
+    }
+
+    /**
+     * Generate automatic suggestions based on current mood
+     */
+    private suspend fun generateAutoSuggestions(text: String) {
+        try {
+            if (!isAIEnabled || aiTextProcessor == null) {
+                // Use local suggestions if AI is not available
+                generateLocalSuggestions(text)
+                return
+            }
+
+            val aiMood = when (currentMood) {
+                MoodType.RESPECTFUL -> AITextProcessor.MoodType.RESPECTFUL
+                MoodType.FUNNY -> AITextProcessor.MoodType.FUNNY
+                MoodType.ANGRY -> AITextProcessor.MoodType.ANGRY
+                MoodType.NORMAL -> AITextProcessor.MoodType.NORMAL
+            }
+
+            // Generate AI suggestions
+            val result = aiTextProcessor?.enhanceText(text, aiMood)
+            result?.fold(
+                onSuccess = { enhancedText ->
+                    // Show AI suggestion
+                    showSuggestions(listOf(enhancedText, text)) // Original text as fallback
+                },
+                onFailure = {
+                    // Fallback to local suggestions
+                    generateLocalSuggestions(text)
+                }
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Error generating auto suggestions", e)
+            generateLocalSuggestions(text)
+        }
+    }
+
+    /**
+     * Generate local suggestions based on mood (AI-powered when possible)
+     */
+    private fun generateLocalSuggestions(text: String) {
+        serviceScope.launch {
+            try {
+                if (isAIEnabled && aiTextProcessor != null) {
+                    // Try AI first even for local suggestions
+                    val aiMood = when (currentMood) {
+                        MoodType.RESPECTFUL -> AITextProcessor.MoodType.RESPECTFUL
+                        MoodType.FUNNY -> AITextProcessor.MoodType.FUNNY
+                        MoodType.ANGRY -> AITextProcessor.MoodType.ANGRY
+                        MoodType.NORMAL -> AITextProcessor.MoodType.NORMAL
+                    }
+
+                    val result = aiTextProcessor?.enhanceText(text, aiMood)
+                    result?.fold(
+                        onSuccess = { enhancedText ->
+                            showSuggestions(listOf(enhancedText, text))
+                        },
+                        onFailure = {
+                            // Only use string manipulation as last resort
+                            showFallbackSuggestions(text)
+                        }
+                    )
+                } else {
+                    // AI not available, use fallback
+                    showFallbackSuggestions(text)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error in local suggestions", e)
+                showFallbackSuggestions(text)
+            }
+        }
+    }
+
+    /**
+     * Show fallback suggestions when AI is not available
+     */
+    private fun showFallbackSuggestions(text: String) {
+        val suggestions = mutableListOf<String>()
+
+        // Add original text
+        suggestions.add(text)
+
+        // Add simple mood-based suggestion only as fallback
+        val moodSuggestion = when (currentMood) {
+            MoodType.RESPECTFUL -> "Please $text"
+            MoodType.FUNNY -> "$text 😄"
+            MoodType.ANGRY -> text.uppercase() + "!"
+            MoodType.NORMAL -> text.replaceFirstChar { it.uppercase() }
+        }
+
+        if (moodSuggestion != text) {
+            suggestions.add(0, moodSuggestion)
+        }
+
+        showSuggestions(suggestions)
+    }
+
+    /**
+     * Show suggestions in the suggestion bar
+     */
+    private fun showSuggestions(suggestions: List<String>) {
+        runOnUiThread {
+            suggestionContainer?.removeAllViews()
+
+            suggestions.take(3).forEach { suggestion -> // Limit to 3 suggestions
+                val chipView = createSuggestionChip(suggestion)
+                suggestionContainer?.addView(chipView)
+            }
+
+            suggestionScrollView?.visibility = View.VISIBLE
+        }
+    }
+
+    /**
+     * Hide suggestions bar
+     */
+    private fun hideSuggestions() {
+        runOnUiThread {
+            suggestionScrollView?.visibility = View.GONE
+        }
+    }
+
+    /**
+     * Create a suggestion chip view
+     */
+    private fun createSuggestionChip(suggestion: String): View {
+        val chipView = TextView(this).apply {
+            text = suggestion
+            textSize = 14f
+            setTextColor(Color.WHITE)
+            background = ContextCompat.getDrawable(this@MyKeyboardService, R.drawable.suggestion_chip_bg)
+            setPadding(24, 12, 24, 12)
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
+            maxWidth = 200 // Limit width
+
+            setOnClickListener {
+                applySuggestion(suggestion)
+            }
+        }
+
+        // Add margin between chips
+        val layoutParams = LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.WRAP_CONTENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT
+        ).apply {
+            marginEnd = 12
+        }
+        chipView.layoutParams = layoutParams
+
+        return chipView
+    }
+
+    /**
+     * Apply selected suggestion
+     */
+    private fun applySuggestion(suggestion: String) {
+        val inputConnection = currentInputConnection ?: return
+
+        try {
+            // Delete the current typed text
+            inputConnection.deleteSurroundingText(currentTypedText.length, 0)
+
+            // Insert the suggestion
+            inputConnection.commitText(suggestion, 1)
+
+            // Clear current typed text and hide suggestions
+            currentTypedText.clear()
+            hideSuggestions()
+
+            performHapticFeedback()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error applying suggestion", e)
+        }
+    }
+
+    /**
+     * Run code on UI thread
+     */
+    private fun runOnUiThread(action: () -> Unit) {
+        serviceScope.launch(Dispatchers.Main) {
+            action()
+        }
     }
 
     /**

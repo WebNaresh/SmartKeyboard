@@ -60,6 +60,7 @@ class MaterialKeyboardView @JvmOverloads constructor(
     private var isLongPressTriggered = false
     private var downKey: Keyboard.Key? = null
     private val longPressDelay = 500L // 500ms for long press
+    private var isLongPressKey = false
 
     // Number mapping for QWERTYUIOP -> 1234567890
     private val numberMap = mapOf(
@@ -79,6 +80,7 @@ class MaterialKeyboardView @JvmOverloads constructor(
         super.onDraw(canvas)
         // drawCustomSpaceKey(canvas) // Temporarily disabled to fix black rectangle
         // drawCustomActionButton(canvas) // Disabled to remove green enter icon
+        drawNumberIndicators(canvas)
     }
 
     private fun drawCustomSpaceKey(canvas: Canvas) {
@@ -140,9 +142,50 @@ class MaterialKeyboardView @JvmOverloads constructor(
             lineTo(centerX + size * 0.3f, centerY + size * 0.3f)
             lineTo(centerX - size * 0.3f, centerY + size * 0.3f)
         }
-        
+
         iconPaint.style = Paint.Style.STROKE
         canvas.drawPath(path, iconPaint)
+    }
+
+    private fun drawNumberIndicators(canvas: Canvas) {
+        val keyboard = keyboard ?: return
+        val keys = keyboard.keys
+
+        // Paint for number indicators
+        val numberPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            color = Color.parseColor("#AAAAAA") // Lighter gray for better visibility
+            textSize = 20f // Smaller text size
+            textAlign = Paint.Align.CENTER
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+        }
+
+        // Number mapping for display
+        val numberLabels = mapOf(
+            113 to "1", // q -> 1
+            119 to "2", // w -> 2
+            101 to "3", // e -> 3
+            114 to "4", // r -> 4
+            116 to "5", // t -> 5
+            121 to "6", // y -> 6
+            117 to "7", // u -> 7
+            105 to "8", // i -> 8
+            111 to "9", // o -> 9
+            112 to "0"  // p -> 0
+        )
+
+        // Draw number indicators on top row keys
+        keys.forEach { key ->
+            val primaryCode = key.codes[0]
+            val numberLabel = numberLabels[primaryCode]
+
+            if (numberLabel != null) {
+                // Position the number in the bottom-right area of the key
+                val numberX = key.x + key.width - 16f
+                val numberY = key.y + key.height - 8f
+
+                canvas.drawText(numberLabel, numberX, numberY, numberPaint)
+            }
+        }
     }
 
     override fun onTouchEvent(me: MotionEvent?): Boolean {
@@ -162,17 +205,15 @@ class MaterialKeyboardView @JvmOverloads constructor(
                     pressedKey?.let { key ->
                         downKey = key
                         isLongPressTriggered = false
+                        isLongPressKey = numberMap.containsKey(key.codes[0])
 
                         // Check if this is a top row key that supports long press for numbers
-                        if (numberMap.containsKey(key.codes[0])) {
+                        if (isLongPressKey) {
                             // Start long press timer
                             longPressRunnable = Runnable {
                                 handleLongPress(key)
                             }
                             longPressHandler.postDelayed(longPressRunnable!!, longPressDelay)
-
-                            // Let the parent handle the initial touch for normal behavior
-                            return super.onTouchEvent(me)
                         }
                     }
                 }
@@ -184,18 +225,34 @@ class MaterialKeyboardView @JvmOverloads constructor(
                         longPressRunnable = null
                     }
 
-                    // If long press was triggered, dismiss any preview and consume the event
+                    // If long press was triggered, consume the event
                     if (isLongPressTriggered) {
                         isLongPressTriggered = false
                         downKey = null
+                        isLongPressKey = false
 
-                        // Dismiss the key preview popup
+                        // Aggressively dismiss the preview popup
                         dismissKeyPreview()
 
                         return true // Consume the event to prevent normal key processing
                     }
 
+                    // If this was a long press key but long press wasn't triggered, send normal key event
+                    if (isLongPressKey) {
+                        downKey?.let { key ->
+                            // Send normal key press event
+                            val keyboardService = context as? MyKeyboardService
+                            keyboardService?.let { service ->
+                                service.onKey(key.codes[0], key.codes)
+                            }
+                        }
+                        downKey = null
+                        isLongPressKey = false
+                        return true
+                    }
+
                     downKey = null
+                    isLongPressKey = false
                 }
 
                 MotionEvent.ACTION_MOVE -> {
@@ -214,7 +271,8 @@ class MaterialKeyboardView @JvmOverloads constructor(
             }
         }
 
-        return super.onTouchEvent(me)
+        // Only call super for non-long-press keys
+        return if (isLongPressKey) true else super.onTouchEvent(me)
     }
 
     private fun handleLongPress(key: Keyboard.Key) {
@@ -224,7 +282,7 @@ class MaterialKeyboardView @JvmOverloads constructor(
         if (numberCode != null) {
             isLongPressTriggered = true
 
-            // Dismiss the key preview popup immediately
+            // Immediately dismiss the key preview popup
             dismissKeyPreview()
 
             // Get the keyboard service to input the number
@@ -240,19 +298,70 @@ class MaterialKeyboardView @JvmOverloads constructor(
     }
 
     private fun dismissKeyPreview() {
-        try {
-            // Force dismiss any key preview popup
-            val previewPopup = javaClass.superclass?.getDeclaredField("mPreviewPopup")
-            previewPopup?.isAccessible = true
-            val popup = previewPopup?.get(this)
+        // Method 1: Immediate multiple invalidations
+        invalidate()
 
-            popup?.let {
-                val dismissMethod = it.javaClass.getMethod("dismiss")
-                dismissMethod.invoke(it)
+        // Method 2: Try to access and dismiss the preview popup through reflection
+        try {
+            val previewPopupField = javaClass.superclass?.getDeclaredField("mPreviewPopup")
+            previewPopupField?.isAccessible = true
+            val previewPopup = previewPopupField?.get(this)
+
+            previewPopup?.let { popup ->
+                val dismissMethod = popup.javaClass.getMethod("dismiss")
+                dismissMethod.invoke(popup)
             }
         } catch (e: Exception) {
-            // Fallback: try to invalidate the view to clear any stuck previews
+            // Try alternative field name
+            try {
+                val previewPopupField = javaClass.superclass?.getDeclaredField("mPopupPreview")
+                previewPopupField?.isAccessible = true
+                val previewPopup = previewPopupField?.get(this)
+
+                previewPopup?.let { popup ->
+                    val dismissMethod = popup.javaClass.getMethod("dismiss")
+                    dismissMethod.invoke(popup)
+                }
+            } catch (e2: Exception) {
+                // Ignore
+            }
+        }
+
+        // Method 3: Try to call dismissPreview method directly
+        try {
+            val dismissMethod = javaClass.superclass?.getDeclaredMethod("dismissPreview")
+            dismissMethod?.isAccessible = true
+            dismissMethod?.invoke(this)
+        } catch (e: Exception) {
+            // Ignore
+        }
+
+        // Method 4: Aggressive invalidation with delays
+        post {
             invalidate()
+            postDelayed({
+                invalidate()
+                postDelayed({
+                    invalidate()
+                }, 50)
+            }, 10)
+        }
+
+        // Method 5: Try to reset preview state
+        try {
+            val setPreviewEnabledMethod = javaClass.superclass?.getDeclaredMethod("setPreviewEnabled", Boolean::class.java)
+            setPreviewEnabledMethod?.isAccessible = true
+            setPreviewEnabledMethod?.invoke(this, false)
+
+            postDelayed({
+                try {
+                    setPreviewEnabledMethod?.invoke(this, true)
+                } catch (e: Exception) {
+                    // Ignore
+                }
+            }, 100)
+        } catch (e: Exception) {
+            // Ignore
         }
     }
 }
