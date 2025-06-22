@@ -197,8 +197,23 @@ class MaterialKeyboardView @JvmOverloads constructor(
             val x = event.x.toInt()
             val y = event.y.toInt()
 
+            // Check if this is the space key
+            isSpaceKeyPressed = isSpaceKey(x, y)
+
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
+                    // If this is the space key, handle it specially to disable preview
+                    if (isSpaceKeyPressed) {
+                        // Temporarily disable preview for space key
+                        try {
+                            val setPreviewEnabledMethod = javaClass.superclass?.getDeclaredMethod("setPreviewEnabled", Boolean::class.java)
+                            setPreviewEnabledMethod?.isAccessible = true
+                            setPreviewEnabledMethod?.invoke(this, false)
+                        } catch (e: Exception) {
+                            // Ignore if method not available
+                        }
+                    }
+
                     // Find which key was pressed
                     val pressedKey = keyboard.keys.find { key ->
                         x >= key.x && x <= key.x + key.width &&
@@ -222,6 +237,18 @@ class MaterialKeyboardView @JvmOverloads constructor(
                 }
 
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    // Re-enable preview if it was disabled for space key
+                    if (isSpaceKeyPressed) {
+                        try {
+                            val setPreviewEnabledMethod = javaClass.superclass?.getDeclaredMethod("setPreviewEnabled", Boolean::class.java)
+                            setPreviewEnabledMethod?.isAccessible = true
+                            setPreviewEnabledMethod?.invoke(this, true)
+                        } catch (e: Exception) {
+                            // Ignore if method not available
+                        }
+                        isSpaceKeyPressed = false
+                    }
+
                     // Cancel long press timer
                     longPressRunnable?.let { runnable ->
                         longPressHandler.removeCallbacks(runnable)
@@ -298,6 +325,20 @@ class MaterialKeyboardView @JvmOverloads constructor(
                 service.performHapticFeedback()
             }
         }
+    }
+
+    /**
+     * Override to disable key preview for space key specifically
+     */
+    private var isSpaceKeyPressed = false
+
+    private fun isSpaceKey(x: Int, y: Int): Boolean {
+        val keyboard = keyboard ?: return false
+        val spaceKey = keyboard.keys.find { it.codes.isNotEmpty() && it.codes[0] == 32 }
+        return spaceKey?.let { key ->
+            x >= key.x && x <= key.x + key.width &&
+            y >= key.y && y <= key.y + key.height
+        } ?: false
     }
 
     private fun dismissKeyPreview() {

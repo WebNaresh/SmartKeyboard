@@ -95,7 +95,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:background="#FF121212"
-            android:keyBackground="@drawable/material_key_bg"
+            android:keyBackground="@drawable/custom_key_bg"
             android:keyTextColor="#FFFFFFFF"
             android:keyTextSize="18sp"
             android:keyPreviewLayout="@layout/key_preview"

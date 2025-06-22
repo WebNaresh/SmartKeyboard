@@ -43,7 +43,7 @@
     <Row android:rowEdgeFlags="bottom" android:keyHeight="42dp">
         <Key android:codes="63" android:keyLabel="?" android:keyWidth="15%p" android:keyEdgeFlags="left" />
         <Key android:codes="44" android:keyLabel="," android:keyWidth="10%p" />
-        <Key android:codes="32" android:keyLabel="" android:keyWidth="50%p" android:isRepeatable="true" />
+        <Key android:codes="32" android:keyLabel="" android:keyWidth="50%p" android:isRepeatable="true" android:keyBackground="@drawable/space_key_bg" />
         <Key android:codes="46" android:keyLabel="." android:keyWidth="10%p" />
         <Key android:codes="-4" android:keyLabel="⏎" android:keyWidth="15%p" />
     </Row>
