@@ -556,6 +556,7 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
 
                 if (selectedMood != null && selectedMood.instructions != null) {
                     // All moods are now custom moods with instructions
+                    Log.d(TAG, "Enhancing text with custom mood: '${selectedMood.title}' - Instructions: '${selectedMood.instructions}'")
                     val result = aiTextProcessor?.enhanceTextWithCustomInstructions(text, selectedMood.instructions!!)
                     result?.fold(
                         onSuccess = { enhancedText ->
@@ -712,6 +713,7 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
                 val result = withTimeout(3000L) { // 3 second timeout for suggestions
                     if (selectedMood != null && selectedMood.instructions != null) {
                         // All moods are now custom moods with instructions
+                        Log.d(TAG, "Generating suggestions with custom mood: '${selectedMood.title}' - Instructions: '${selectedMood.instructions}'")
                         aiTextProcessor!!.generateSuggestionsWithCustomInstructions(text, selectedMood.instructions!!)
                     } else {
                         // No mood selected or no instructions, use simple suggestions

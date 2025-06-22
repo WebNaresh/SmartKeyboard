@@ -199,8 +199,11 @@ class AITextProcessor(private val apiKey: String) {
             }
 
             // Real AI processing with custom instructions
+            Log.d(TAG, "Using custom instructions for enhancement: '$customInstructions'")
             val systemPrompt = buildCustomSystemPrompt(customInstructions, context)
-            val userPrompt = "Please enhance and improve this message according to the instructions: $text"
+            val userPrompt = "Transform this message to match the custom mood instructions exactly. Original text: '$text'. Return the transformed version that strongly reflects the specified mood/personality:"
+            Log.d(TAG, "System prompt: $systemPrompt")
+            Log.d(TAG, "User prompt: $userPrompt")
 
             val request = ChatCompletionRequest(
                 model = "gpt-3.5-turbo",
@@ -227,6 +230,13 @@ class AITextProcessor(private val apiKey: String) {
                 } else {
                     val cleanedText = cleanResponseText(enhancedText)
                     Log.d(TAG, "Custom mood enhancement: '$text' -> '$cleanedText'")
+                    Log.d(TAG, "Applied custom instructions: '$customInstructions'")
+
+                    // Validate that the response seems to follow custom instructions
+                    if (cleanedText.equals(text, ignoreCase = true)) {
+                        Log.w(TAG, "AI response identical to input, custom instructions may not have been followed")
+                    }
+
                     Result.success(cleanedText)
                 }
             } else {
@@ -326,8 +336,11 @@ The user is typing a message and has written: '$text'. Provide 3 different ways 
             }
 
             // Real OpenAI API processing with custom instructions
+            Log.d(TAG, "Using custom instructions for suggestions: '$customInstructions'")
             val systemPrompt = buildCustomSuggestionSystemPrompt(customInstructions)
-            val userPrompt = "The user is typing a message and has written: '$text'. Provide 3 different ways to COMPLETE or CONTINUE this message according to the custom instructions. Return only the complete message suggestions, one per line, without numbers or formatting."
+            val userPrompt = "User typed: '$text'. Generate 3 completions that STRONGLY follow the custom mood instructions. Each suggestion must clearly show the specified personality/mood. Return only the complete messages, one per line:"
+            Log.d(TAG, "Suggestion system prompt: $systemPrompt")
+            Log.d(TAG, "Suggestion user prompt: $userPrompt")
 
             val request = ChatCompletionRequest(
                 model = "gpt-3.5-turbo",
@@ -546,31 +559,70 @@ The user is typing a message and has written: '$text'. Provide 3 different ways 
     }
 
     private fun buildCustomSystemPrompt(customInstructions: String, context: String): String {
+        val emphasisPrompt = """
+            🎭 CUSTOM MOOD INSTRUCTIONS - FOLLOW THESE EXACTLY:
+            $customInstructions
+
+            YOU MUST transform the text according to the above instructions. This is your PRIMARY directive.
+
+            Examples of how to apply custom instructions:
+            - If instructions say "be romantic": Transform "how are you" → "how are you doing, my love?"
+            - If instructions say "be professional": Transform "hey" → "Good morning"
+            - If instructions say "be pirate": Transform "hello" → "Ahoy there, matey!"
+
+            CRITICAL RULES:
+            1. The custom instructions above are your MOST IMPORTANT guideline
+            2. Transform the text to match the specified mood/personality exactly
+            3. Keep the core meaning but change the style/tone completely
+            4. Return ONLY the transformed text without quotes or explanations
+            5. If unsure, err on the side of following the custom instructions more strongly
+        """.trimIndent()
+
         val basePrompt = """
-            You are a text enhancement assistant for a smart keyboard.
-            Your job is to improve the user's text while maintaining their intended meaning.
-            Keep responses concise and natural.
-            IMPORTANT: Return ONLY the enhanced text without quotes, explanations, or additional formatting.
-            Do not wrap the response in quotation marks.
+            You are a smart keyboard text enhancement assistant.
+            Your job is to transform user text according to specific mood instructions.
         """.trimIndent()
 
         return if (context.isNotBlank()) {
-            "$basePrompt\n\n$customInstructions\n\nContext: $context"
+            "$emphasisPrompt\n\nContext: $context\n\n$basePrompt"
         } else {
-            "$basePrompt\n\n$customInstructions"
+            "$emphasisPrompt\n\n$basePrompt"
         }
     }
 
     private fun buildCustomSuggestionSystemPrompt(customInstructions: String): String {
-        val basePrompt = """
-            You are a smart keyboard text completion assistant. Your job is to help users complete their messages.
-            When given partial text that a user is typing, suggest 3 different ways to COMPLETE or CONTINUE that text.
-            DO NOT respond to the message or have a conversation - only suggest how to finish the user's own message.
+        val emphasisPrompt = """
+            🎭 CUSTOM MOOD INSTRUCTIONS - APPLY TO ALL SUGGESTIONS:
+            $customInstructions
 
-            IMPORTANT: Return only the complete suggested messages, one per line, without numbers, bullets, or formatting.
+            YOU MUST generate suggestions that follow the above mood/personality instructions exactly.
+
+            Examples of mood-based suggestions:
+            - If instructions say "be romantic" and user types "good morning":
+              → "Good morning, my beautiful love"
+              → "Good morning, gorgeous. Hope you slept well"
+              → "Morning, sweetheart. Can't wait to see you"
+
+            - If instructions say "be professional" and user types "thanks":
+              → "Thank you for your assistance"
+              → "Thank you very much for your help"
+              → "I appreciate your support"
+
+            CRITICAL RULES:
+            1. ALL 3 suggestions MUST follow the custom mood instructions
+            2. Complete or continue the user's message in the specified style
+            3. Each suggestion should have the same mood but different wording
+            4. Return only the complete messages, one per line
+            5. NO numbers, bullets, quotes, or explanations
+            6. Make the mood transformation obvious and strong
         """.trimIndent()
 
-        return "$basePrompt\n\n$customInstructions"
+        val basePrompt = """
+            You are a smart keyboard suggestion assistant.
+            Generate 3 ways to complete the user's message according to the mood instructions.
+        """.trimIndent()
+
+        return "$emphasisPrompt\n\n$basePrompt"
     }
 
     private fun parseSuggestions(suggestionsText: String, originalText: String): List<String> {
