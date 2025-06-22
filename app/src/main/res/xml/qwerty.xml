@@ -20,7 +20,7 @@
     </Row>
     <Row>
         <!-- Left spacer: 5% to center the 9-key row -->
-        <Key android:codes="-1000" android:keyWidth="5%p" android:keyEdgeFlags="left" android:keyLabel="" android:keyBackground="@drawable/invisible_spacer_bg" />
+        <Key android:codes="-1000" android:keyWidth="5%p" android:keyEdgeFlags="left" android:keyLabel="" android:keyBackground="@drawable/invisible_spacer_bg" android:isModifier="false" android:isSticky="false" />
         <Key android:codes="97" android:keyLabel="a" android:keyWidth="10%p" />
         <Key android:codes="115" android:keyLabel="s" android:keyWidth="10%p" />
         <Key android:codes="100" android:keyLabel="d" android:keyWidth="10%p" />
@@ -31,7 +31,7 @@
         <Key android:codes="107" android:keyLabel="k" android:keyWidth="10%p" />
         <Key android:codes="108" android:keyLabel="l" android:keyWidth="10%p" />
         <!-- Right spacer: 5% to center the 9-key row -->
-        <Key android:codes="-1000" android:keyWidth="5%p" android:keyEdgeFlags="right" android:keyLabel="" android:keyBackground="@drawable/invisible_spacer_bg" />
+        <Key android:codes="-1000" android:keyWidth="5%p" android:keyEdgeFlags="right" android:keyLabel="" android:keyBackground="@drawable/invisible_spacer_bg" android:isModifier="false" android:isSticky="false" />
     </Row>
     <Row>
         <Key android:codes="-1" android:keyLabel="⇧" android:keyWidth="15%p" android:isModifier="true" android:isSticky="true" android:keyEdgeFlags="left" />
