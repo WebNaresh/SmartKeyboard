@@ -86,7 +86,7 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
     override fun onCreateInputView(): View {
         val inputView = layoutInflater.inflate(R.layout.keyboard_view, null)
         keyboardView = inputView.findViewById(R.id.keyboard_view)
-        keyboard = Keyboard(this, R.xml.qwerty)
+        keyboard = CenteredKeyboard(this, R.xml.qwerty)
         keyboardView?.keyboard = keyboard
         keyboardView?.setOnKeyboardActionListener(this)
 
@@ -110,7 +110,13 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
 
         return inputView
     }
-    
+
+    override fun onDestroy() {
+        super.onDestroy()
+        // Unregister broadcast receiver
+        unregisterMoodUpdateReceiver()
+    }
+
     override fun onStartInput(attribute: EditorInfo?, restarting: Boolean) {
         super.onStartInput(attribute, restarting)
         // Initialize keyboard based on input type if needed
@@ -269,7 +275,7 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
         // Set click listeners with haptic feedback
         moodSelectorPill?.setOnClickListener {
             performHapticFeedback()
-            toggleMoodButtonsVisibility()
+            handleMoodSelectorClick()
         }
         btnEnhanceText?.setOnClickListener {
             performHapticFeedback()
@@ -346,6 +352,62 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
         Log.d(TAG, "Selected mood: ${mood.title} (${mood.id})")
     }
 
+    /**
+     * Handle mood selector pill click with validation
+     */
+    private fun handleMoodSelectorClick() {
+        // Check if there are any custom moods available
+        if (allMoods.isEmpty()) {
+            // Show toast message prompting user to create moods
+            showCreateMoodPrompt()
+        } else {
+            // Show mood selector dropdown
+            toggleMoodButtonsVisibility()
+        }
+    }
+
+    /**
+     * Show prompt to create first custom mood
+     */
+    private fun showCreateMoodPrompt() {
+        try {
+            // Show toast message
+            android.widget.Toast.makeText(
+                this,
+                "Please create your first custom mood in Settings",
+                android.widget.Toast.LENGTH_LONG
+            ).show()
+
+            // Optional: Try to open settings directly
+            openKeyboardSettings()
+
+            Log.d(TAG, "Prompted user to create custom moods - no moods available")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error showing create mood prompt", e)
+        }
+    }
+
+    /**
+     * Attempt to open keyboard settings
+     */
+    private fun openKeyboardSettings() {
+        try {
+            val intent = android.content.Intent(this, SettingsActivity::class.java).apply {
+                flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            startActivity(intent)
+            Log.d(TAG, "Opened keyboard settings")
+        } catch (e: Exception) {
+            Log.w(TAG, "Could not open settings directly", e)
+            // Fallback: Show additional guidance
+            android.widget.Toast.makeText(
+                this,
+                "Open Smart Keyboard Settings to create custom moods",
+                android.widget.Toast.LENGTH_LONG
+            ).show()
+        }
+    }
+
     // Legacy method - kept for backward compatibility but not used
     private fun selectMood(mood: MoodType) {
         // This method is deprecated - use selectDynamicMood instead
@@ -407,12 +469,19 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
     }
 
     private fun updateMoodPillAppearance() {
-        // Update mood emoji in the pill based on selected custom mood
-        val moodEmojiText = currentSelectedMood?.emoji ?: "🎭"
+        // Update mood emoji in the pill based on selected custom mood or empty state
+        val moodEmojiText = when {
+            allMoods.isEmpty() -> "➕" // Plus icon to indicate "add mood"
+            currentSelectedMood != null -> currentSelectedMood!!.emoji
+            else -> "🎭" // Default theater mask when moods exist but none selected
+        }
         moodEmoji?.text = moodEmojiText
 
         // Highlight pill if a mood is selected, dim if no moods available
-        moodSelectorPill?.isSelected = currentSelectedMood != null
+        moodSelectorPill?.isSelected = currentSelectedMood != null && allMoods.isNotEmpty()
+
+        // Set alpha to indicate state
+        moodSelectorPill?.alpha = if (allMoods.isEmpty()) 0.6f else 1.0f
     }
 
     /**
@@ -851,6 +920,145 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error providing haptic feedback", e)
+        }
+    }
+
+    /**
+     * Register broadcast receiver for real-time mood updates
+     */
+    private fun registerMoodUpdateReceiver() {
+        if (moodUpdateReceiver == null) {
+            moodUpdateReceiver = object : BroadcastReceiver() {
+                override fun onReceive(context: Context?, intent: Intent?) {
+                    when (intent?.action) {
+                        MoodBroadcastConstants.ACTION_MOOD_CREATED -> {
+                            val moodId = intent.getStringExtra(MoodBroadcastConstants.EXTRA_MOOD_ID)
+                            val moodTitle = intent.getStringExtra(MoodBroadcastConstants.EXTRA_MOOD_TITLE)
+                            Log.d(TAG, "Received mood created broadcast: $moodTitle ($moodId)")
+                            handleMoodCreated(moodId, moodTitle)
+                        }
+                        MoodBroadcastConstants.ACTION_MOOD_UPDATED -> {
+                            val newMoodId = intent.getStringExtra(MoodBroadcastConstants.EXTRA_MOOD_ID)
+                            val oldMoodId = intent.getStringExtra(MoodBroadcastConstants.EXTRA_OLD_MOOD_ID)
+                            val moodTitle = intent.getStringExtra(MoodBroadcastConstants.EXTRA_MOOD_TITLE)
+                            Log.d(TAG, "Received mood updated broadcast: $moodTitle ($oldMoodId -> $newMoodId)")
+                            handleMoodUpdated(oldMoodId, newMoodId, moodTitle)
+                        }
+                        MoodBroadcastConstants.ACTION_MOOD_DELETED -> {
+                            val moodId = intent.getStringExtra(MoodBroadcastConstants.EXTRA_MOOD_ID)
+                            val moodTitle = intent.getStringExtra(MoodBroadcastConstants.EXTRA_MOOD_TITLE)
+                            Log.d(TAG, "Received mood deleted broadcast: $moodTitle ($moodId)")
+                            handleMoodDeleted(moodId, moodTitle)
+                        }
+                        MoodBroadcastConstants.ACTION_MOODS_REFRESHED -> {
+                            Log.d(TAG, "Received moods refresh broadcast")
+                            reloadMoodsFromStorage()
+                        }
+                    }
+                }
+            }
+
+            val intentFilter = IntentFilter().apply {
+                addAction(MoodBroadcastConstants.ACTION_MOOD_CREATED)
+                addAction(MoodBroadcastConstants.ACTION_MOOD_UPDATED)
+                addAction(MoodBroadcastConstants.ACTION_MOOD_DELETED)
+                addAction(MoodBroadcastConstants.ACTION_MOODS_REFRESHED)
+            }
+
+            registerReceiver(moodUpdateReceiver, intentFilter)
+            Log.d(TAG, "Mood update receiver registered")
+        }
+    }
+
+    /**
+     * Unregister broadcast receiver
+     */
+    private fun unregisterMoodUpdateReceiver() {
+        moodUpdateReceiver?.let {
+            try {
+                unregisterReceiver(it)
+                Log.d(TAG, "Mood update receiver unregistered")
+            } catch (e: Exception) {
+                Log.w(TAG, "Error unregistering mood update receiver", e)
+            }
+            moodUpdateReceiver = null
+        }
+    }
+
+    /**
+     * Handle mood created event
+     */
+    private fun handleMoodCreated(moodId: String?, moodTitle: String?) {
+        if (moodId != null && moodTitle != null) {
+            // Reload moods to include the new one
+            reloadMoodsFromStorage()
+            Log.d(TAG, "Mood created: $moodTitle")
+        }
+    }
+
+    /**
+     * Handle mood updated event
+     */
+    private fun handleMoodUpdated(oldMoodId: String?, newMoodId: String?, moodTitle: String?) {
+        if (oldMoodId != null && newMoodId != null && moodTitle != null) {
+            // Check if the currently selected mood was updated
+            if (currentSelectedMood?.id == oldMoodId) {
+                // Update the current selection to the new mood ID
+                val updatedMood = allMoods.find { it.id == newMoodId }
+                currentSelectedMood = updatedMood
+                updateMoodPillAppearance()
+                Log.d(TAG, "Updated currently selected mood: $moodTitle")
+            }
+
+            // Reload moods to reflect the changes
+            reloadMoodsFromStorage()
+            Log.d(TAG, "Mood updated: $moodTitle")
+        }
+    }
+
+    /**
+     * Handle mood deleted event
+     */
+    private fun handleMoodDeleted(moodId: String?, moodTitle: String?) {
+        if (moodId != null && moodTitle != null) {
+            // Check if the currently selected mood was deleted
+            if (currentSelectedMood?.id == moodId) {
+                // Switch to the first available mood or null if none exist
+                val remainingMoods = allMoods.filter { it.id != moodId }
+                currentSelectedMood = remainingMoods.firstOrNull()
+                updateMoodPillAppearance()
+                Log.d(TAG, "Deleted currently selected mood, switched to: ${currentSelectedMood?.title ?: "none"}")
+            }
+
+            // Reload moods to remove the deleted one
+            reloadMoodsFromStorage()
+            Log.d(TAG, "Mood deleted: $moodTitle")
+        }
+    }
+
+    /**
+     * Reload moods from storage and update UI
+     */
+    private fun reloadMoodsFromStorage() {
+        try {
+            // Get updated custom moods from storage
+            val customMoods = customMoodManager.getCustomMoods()
+
+            // Update all moods list
+            allMoods = MoodData.getAllMoods(customMoods)
+
+            // Update adapter
+            if (::keyboardMoodAdapter.isInitialized) {
+                keyboardMoodAdapter.updateMoods(allMoods)
+                keyboardMoodAdapter.updateSelectedMood(currentSelectedMood?.id ?: "")
+            }
+
+            // Update pill appearance
+            updateMoodPillAppearance()
+
+            Log.d(TAG, "Reloaded ${allMoods.size} moods from storage")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error reloading moods from storage", e)
         }
     }
 

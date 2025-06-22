@@ -15,6 +15,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.example.smartkeyboard.adapter.CustomMoodAdapter
 import com.example.smartkeyboard.data.CustomMood
 import com.example.smartkeyboard.manager.CustomMoodManager
+import com.example.smartkeyboard.utils.MoodBroadcastConstants
 
 class SettingsActivity : AppCompatActivity() {
 
@@ -45,6 +46,9 @@ class SettingsActivity : AppCompatActivity() {
         setupCustomMoodRecyclerView()
         loadSavedApiKey()
         loadCustomMoods()
+
+        // Send refresh broadcast to keyboard when settings open
+        sendMoodRefreshBroadcast()
     }
     
     private fun initViews() {
@@ -255,6 +259,14 @@ class SettingsActivity : AppCompatActivity() {
             }
             .setNegativeButton("Cancel", null)
             .show()
+    }
+
+    /**
+     * Send broadcast to notify keyboard to refresh moods
+     */
+    private fun sendMoodRefreshBroadcast() {
+        val intent = android.content.Intent(MoodBroadcastConstants.ACTION_MOODS_REFRESHED)
+        sendBroadcast(intent)
     }
 
     companion object {

@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Keyboard xmlns:android="http://schemas.android.com/apk/res/android"
     android:keyWidth="9.2%p"
-    android:horizontalGap="0.5dp"
+    android:horizontalGap="8dp"
     android:verticalGap="8dp"
     android:keyHeight="42dp"
+    android:keyBackground="@drawable/custom_key_bg"
     >
     <Row android:rowEdgeFlags="top">
         <Key android:codes="113" android:keyLabel="q" android:keyWidth="10%p" android:keyEdgeFlags="left" android:popupCharacters="1" />
@@ -17,16 +18,16 @@
         <Key android:codes="111" android:keyLabel="o" android:keyWidth="10%p" android:popupCharacters="9" />
         <Key android:codes="112" android:keyLabel="p" android:keyWidth="10%p" android:keyEdgeFlags="right" android:popupCharacters="0" />
     </Row>
-    <Row>
-        <Key android:codes="97" android:keyLabel="a" android:keyEdgeFlags="left" android:keyWidth="11.11%p" />
-        <Key android:codes="115" android:keyLabel="s" android:keyWidth="11.11%p" />
-        <Key android:codes="100" android:keyLabel="d" android:keyWidth="11.11%p" />
-        <Key android:codes="102" android:keyLabel="f" android:keyWidth="11.11%p" />
-        <Key android:codes="103" android:keyLabel="g" android:keyWidth="11.11%p" />
-        <Key android:codes="104" android:keyLabel="h" android:keyWidth="11.11%p" />
-        <Key android:codes="106" android:keyLabel="j" android:keyWidth="11.11%p" />
-        <Key android:codes="107" android:keyLabel="k" android:keyWidth="11.11%p" />
-        <Key android:codes="108" android:keyLabel="l" android:keyWidth="11.12%p" android:keyEdgeFlags="right" />
+    <Row android:keyWidth="10%p">
+        <Key android:codes="97" android:keyLabel="a" android:keyEdgeFlags="left" />
+        <Key android:codes="115" android:keyLabel="s" />
+        <Key android:codes="100" android:keyLabel="d" />
+        <Key android:codes="102" android:keyLabel="f" />
+        <Key android:codes="103" android:keyLabel="g" />
+        <Key android:codes="104" android:keyLabel="h" />
+        <Key android:codes="106" android:keyLabel="j" />
+        <Key android:codes="107" android:keyLabel="k" />
+        <Key android:codes="108" android:keyLabel="l" android:keyEdgeFlags="right" />
     </Row>
     <Row>
         <Key android:codes="-1" android:keyLabel="⇧" android:keyWidth="15%p" android:isModifier="true" android:isSticky="true" android:keyEdgeFlags="left" />
