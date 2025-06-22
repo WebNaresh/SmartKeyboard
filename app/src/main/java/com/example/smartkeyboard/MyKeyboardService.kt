@@ -86,7 +86,7 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
     override fun onCreateInputView(): View {
         val inputView = layoutInflater.inflate(R.layout.keyboard_view, null)
         keyboardView = inputView.findViewById(R.id.keyboard_view)
-        keyboard = CenteredKeyboard(this, R.xml.qwerty)
+        keyboard = Keyboard(this, R.xml.qwerty)
         keyboardView?.keyboard = keyboard
         keyboardView?.setOnKeyboardActionListener(this)
 
@@ -178,6 +178,10 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
             Keyboard.KEYCODE_SHIFT -> {
                 // Handle shift key
                 handleShift()
+            }
+            -1000 -> {
+                // Spacer key - do nothing (invisible centering keys)
+                Log.d(TAG, "Spacer key pressed - ignoring")
             }
             else -> {
                 // Handle regular character input

@@ -204,7 +204,7 @@ class MaterialKeyboardView @JvmOverloads constructor(
                 MotionEvent.ACTION_DOWN -> {
                     // If this is the space key, handle it specially to disable preview
                     if (isSpaceKeyPressed) {
-                        // Temporarily disable preview for space key
+                        // Temporarily disable preview for space key and spacer keys
                         try {
                             val setPreviewEnabledMethod = javaClass.superclass?.getDeclaredMethod("setPreviewEnabled", Boolean::class.java)
                             setPreviewEnabledMethod?.isAccessible = true
@@ -225,6 +225,18 @@ class MaterialKeyboardView @JvmOverloads constructor(
                         isLongPressTriggered = false
                         isLongPressKey = numberMap.containsKey(key.codes[0])
 
+                        // Check if this is a spacer key and disable preview
+                        val isSpacerKey = key.codes.isNotEmpty() && key.codes[0] == -1000
+                        if (isSpacerKey) {
+                            try {
+                                val setPreviewEnabledMethod = javaClass.superclass?.getDeclaredMethod("setPreviewEnabled", Boolean::class.java)
+                                setPreviewEnabledMethod?.isAccessible = true
+                                setPreviewEnabledMethod?.invoke(this, false)
+                            } catch (e: Exception) {
+                                // Ignore if method not available
+                            }
+                        }
+
                         // Check if this is a top row key that supports long press for numbers
                         if (isLongPressKey) {
                             // Start long press timer
@@ -237,8 +249,11 @@ class MaterialKeyboardView @JvmOverloads constructor(
                 }
 
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    // Re-enable preview if it was disabled for space key
-                    if (isSpaceKeyPressed) {
+                    // Check if this was a spacer key
+                    val wasSpacerKey = downKey?.codes?.isNotEmpty() == true && downKey!!.codes[0] == -1000
+
+                    // Re-enable preview if it was disabled for space key or spacer key
+                    if (isSpaceKeyPressed || wasSpacerKey) {
                         try {
                             val setPreviewEnabledMethod = javaClass.superclass?.getDeclaredMethod("setPreviewEnabled", Boolean::class.java)
                             setPreviewEnabledMethod?.isAccessible = true
