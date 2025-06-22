@@ -134,124 +134,18 @@
         android:visibility="gone"
         android:elevation="12dp">
 
-        <LinearLayout
-            android:id="@+id/btn_respectful"
-            android:layout_width="160dp"
-            android:layout_height="48dp"
-            android:background="@drawable/mood_item_bg"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:paddingHorizontal="16dp"
-            android:layout_marginBottom="2dp"
-            android:clickable="true"
-            android:focusable="true">
-
-            <!-- Fixed-size emoji container -->
-            <FrameLayout
-                android:layout_width="24dp"
-                android:layout_height="24dp"
-                android:layout_marginEnd="8dp">
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="match_parent"
-                    android:text="❤️"
-                    android:textSize="16sp"
-                    android:gravity="center" />
-            </FrameLayout>
-
-            <TextView
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="Respectful"
-                android:textColor="#FFFFFF"
-                android:textSize="14sp"
-                android:fontFamily="sans-serif-medium"
-                android:gravity="center_vertical"
-                android:singleLine="true"
-                android:ellipsize="none" />
-
-        </LinearLayout>
-
-        <LinearLayout
-            android:id="@+id/btn_funny"
-            android:layout_width="160dp"
-            android:layout_height="48dp"
-            android:background="@drawable/mood_item_bg"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:paddingHorizontal="16dp"
-            android:layout_marginBottom="2dp"
-            android:clickable="true"
-            android:focusable="true">
-
-            <!-- Fixed-size emoji container -->
-            <FrameLayout
-                android:layout_width="24dp"
-                android:layout_height="24dp"
-                android:layout_marginEnd="8dp">
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="match_parent"
-                    android:text="😊"
-                    android:textSize="16sp"
-                    android:gravity="center" />
-            </FrameLayout>
-
-            <TextView
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="Funny"
-                android:textColor="#FFFFFF"
-                android:textSize="14sp"
-                android:fontFamily="sans-serif-medium"
-                android:gravity="center_vertical"
-                android:singleLine="true"
-                android:ellipsize="none" />
-
-        </LinearLayout>
-
-        <LinearLayout
-            android:id="@+id/btn_angry"
-            android:layout_width="160dp"
-            android:layout_height="48dp"
-            android:background="@drawable/mood_item_bg"
-            android:orientation="horizontal"
-            android:gravity="center_vertical"
-            android:paddingHorizontal="16dp"
-            android:clickable="true"
-            android:focusable="true">
-
-            <!-- Fixed-size emoji container -->
-            <FrameLayout
-                android:layout_width="24dp"
-                android:layout_height="24dp"
-                android:layout_marginEnd="8dp">
-
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="match_parent"
-                    android:text="😠"
-                    android:textSize="16sp"
-                    android:gravity="center" />
-            </FrameLayout>
-
-            <TextView
-                android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="Angry"
-                android:textColor="#FFFFFF"
-                android:textSize="14sp"
-                android:fontFamily="sans-serif-medium"
-                android:gravity="center_vertical"
-                android:singleLine="true"
-                android:ellipsize="none" />
-
-        </LinearLayout>
+        <!-- Dynamic Mood RecyclerView with Scrolling -->
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/rv_mood_selector"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:maxHeight="300dp"
+            android:scrollbars="vertical"
+            android:scrollbarStyle="outsideOverlay"
+            android:scrollbarThumbVertical="@drawable/scrollbar_thumb"
+            android:scrollbarTrackVertical="@drawable/scrollbar_track"
+            android:fadeScrollbars="false"
+            android:scrollbarFadeDuration="0" />
 
     </LinearLayout>
 

@@ -1,10 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="#FF1E1E1E"
+    android:fillViewport="true">
+
+<LinearLayout
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
     android:orientation="vertical"
-    android:padding="16dp"
-    android:background="#FF1E1E1E">
+    android:padding="16dp">
 
     <TextView
         android:layout_width="match_parent"
@@ -55,13 +60,97 @@
         android:layout_marginTop="16dp"
         android:layout_marginBottom="8dp" />
 
+    <!-- Custom Mood Creator Section -->
     <TextView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="1. Get your OpenAI API key from https://platform.openai.com/api-keys\n2. Enter the API key above and save\n3. Enable Smart Keyboard in Settings > Languages &amp; input\n4. Use the 🤖 button to toggle AI features\n5. Use mood buttons (🎭) for different text styles"
+        android:text="Custom Mood Creator"
+        android:textSize="18sp"
+        android:textStyle="bold"
+        android:textColor="#FFFFFF"
+        android:layout_marginTop="32dp"
+        android:layout_marginBottom="16dp" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Mood Title"
+        android:textSize="16sp"
+        android:textColor="#FFFFFF"
+        android:layout_marginBottom="8dp" />
+
+    <EditText
+        android:id="@+id/et_mood_title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="e.g., Professional, Friendly, Casual"
+        android:textColor="#FFFFFF"
+        android:textColorHint="#CCCCCC"
+        android:background="@drawable/key_bg"
+        android:padding="12dp"
+        android:layout_marginBottom="16dp"
+        android:inputType="textCapWords"
+        android:maxLength="20" />
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="AI Instructions"
+        android:textSize="16sp"
+        android:textColor="#FFFFFF"
+        android:layout_marginBottom="8dp" />
+
+    <EditText
+        android:id="@+id/et_mood_instructions"
+        android:layout_width="match_parent"
+        android:layout_height="120dp"
+        android:hint="Describe how the AI should respond in this mood..."
+        android:textColor="#FFFFFF"
+        android:textColorHint="#CCCCCC"
+        android:background="@drawable/key_bg"
+        android:padding="12dp"
+        android:layout_marginBottom="16dp"
+        android:inputType="textMultiLine|textCapSentences"
+        android:gravity="top"
+        android:maxLength="500" />
+
+    <Button
+        android:id="@+id/btn_create_mood"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="+ Add New Custom Mood"
+        android:background="@drawable/key_bg_selected"
+        android:textColor="#FFFFFF"
+        android:textStyle="bold"
+        android:layout_marginBottom="16dp" />
+
+    <!-- Custom Moods List -->
+    <TextView
+        android:id="@+id/tv_custom_moods_header"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Your Custom Moods"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        android:textColor="#FFFFFF"
+        android:layout_marginBottom="8dp" />
+
+    <TextView
+        android:id="@+id/tv_no_custom_moods"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="No custom moods created yet. Create your first custom mood above!"
         android:textSize="14sp"
         android:textColor="#CCCCCC"
-        android:lineSpacingExtra="4dp"
+        android:gravity="center"
+        android:padding="16dp"
+        android:layout_marginBottom="16dp"
+        android:visibility="gone" />
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/rv_custom_moods"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
         android:layout_marginBottom="24dp" />
 
     <Button
@@ -73,3 +162,5 @@
         android:textColor="#FFFFFF" />
 
 </LinearLayout>
+
+</ScrollView>

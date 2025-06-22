@@ -173,6 +173,74 @@ class AITextProcessor(private val apiKey: String) {
     }
 
     /**
+     * Enhance text with AI using custom instructions
+     */
+    suspend fun enhanceTextWithCustomInstructions(
+        text: String,
+        customInstructions: String,
+        context: String = ""
+    ): Result<String> = withContext(Dispatchers.IO) {
+        try {
+            if (text.isBlank()) {
+                return@withContext Result.success(text)
+            }
+
+            // Check if we have a real API key
+            if (isMockMode || apiKey == "mock-key-for-demo") {
+                Log.d(TAG, "No API key provided, using simple fallback for custom mood")
+                // For custom moods without API key, just capitalize and add period
+                val enhanced = text.replaceFirstChar { it.uppercase() }
+                val result = if (!enhanced.endsWith(".") && !enhanced.endsWith("!") && !enhanced.endsWith("?")) {
+                    "$enhanced."
+                } else {
+                    enhanced
+                }
+                return@withContext Result.success(result)
+            }
+
+            // Real AI processing with custom instructions
+            val systemPrompt = buildCustomSystemPrompt(customInstructions, context)
+            val userPrompt = "Please enhance and improve this message according to the instructions: $text"
+
+            val request = ChatCompletionRequest(
+                model = "gpt-3.5-turbo",
+                messages = listOf(
+                    ChatMessage("system", systemPrompt),
+                    ChatMessage("user", userPrompt)
+                ),
+                maxTokens = 150,
+                temperature = 0.7
+            )
+
+            val response = openAIService!!.createChatCompletion(
+                authorization = "${OpenAIService.BEARER_PREFIX}$apiKey",
+                request = request
+            )
+
+            if (response.isSuccessful) {
+                val chatResponse = response.body()
+                val enhancedText = chatResponse?.choices?.firstOrNull()?.message?.content?.trim()
+
+                if (enhancedText.isNullOrBlank()) {
+                    Log.w(TAG, "Empty response from OpenAI API for custom mood")
+                    Result.success(text)
+                } else {
+                    val cleanedText = cleanResponseText(enhancedText)
+                    Log.d(TAG, "Custom mood enhancement: '$text' -> '$cleanedText'")
+                    Result.success(cleanedText)
+                }
+            } else {
+                val errorMsg = "OpenAI API error for custom mood: ${response.code()} - ${response.message()}"
+                Log.e(TAG, errorMsg)
+                Result.failure(Exception(errorMsg))
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error enhancing text with custom instructions", e)
+            Result.failure(e)
+        }
+    }
+
+    /**
      * Generate suggestions using OpenAI API for what user might type next
      */
     suspend fun generateSuggestions(text: String, mood: MoodType): Result<List<String>> = withContext(Dispatchers.IO) {
@@ -230,6 +298,71 @@ The user is typing a message and has written: '$text'. Provide 3 different ways 
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error calling OpenAI API", e)
+            Result.failure(e)
+        }
+    }
+
+    /**
+     * Generate suggestions using custom instructions
+     */
+    suspend fun generateSuggestionsWithCustomInstructions(
+        text: String,
+        customInstructions: String
+    ): Result<List<String>> = withContext(Dispatchers.IO) {
+        try {
+            if (text.isBlank()) {
+                return@withContext Result.success(listOf(text))
+            }
+
+            // Check if we have a real API key
+            if (isMockMode || apiKey == "mock-key-for-demo") {
+                Log.d(TAG, "No API key provided, using simple fallback for custom mood suggestions")
+                val suggestions = listOf(
+                    text,
+                    text.replaceFirstChar { it.uppercase() },
+                    if (!text.endsWith(".") && !text.endsWith("!") && !text.endsWith("?")) "$text." else text
+                ).distinct()
+                return@withContext Result.success(suggestions)
+            }
+
+            // Real OpenAI API processing with custom instructions
+            val systemPrompt = buildCustomSuggestionSystemPrompt(customInstructions)
+            val userPrompt = "The user is typing a message and has written: '$text'. Provide 3 different ways to COMPLETE or CONTINUE this message according to the custom instructions. Return only the complete message suggestions, one per line, without numbers or formatting."
+
+            val request = ChatCompletionRequest(
+                model = "gpt-3.5-turbo",
+                messages = listOf(
+                    ChatMessage("system", systemPrompt),
+                    ChatMessage("user", userPrompt)
+                ),
+                maxTokens = 150,
+                temperature = 0.8
+            )
+
+            val response = openAIService!!.createChatCompletion(
+                authorization = "${OpenAIService.BEARER_PREFIX}$apiKey",
+                request = request
+            )
+
+            if (response.isSuccessful) {
+                val chatResponse = response.body()
+                val suggestionsText = chatResponse?.choices?.firstOrNull()?.message?.content?.trim()
+
+                if (suggestionsText.isNullOrBlank()) {
+                    Log.w(TAG, "Empty suggestions from OpenAI API for custom mood")
+                    Result.success(listOf(text))
+                } else {
+                    val suggestions = parseSuggestions(suggestionsText, text)
+                    Log.d(TAG, "Custom mood suggestions: $suggestions")
+                    Result.success(suggestions)
+                }
+            } else {
+                val errorMsg = "OpenAI API error for custom mood suggestions: ${response.code()} - ${response.message()}"
+                Log.e(TAG, errorMsg)
+                Result.failure(Exception(errorMsg))
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error generating suggestions with custom instructions", e)
             Result.failure(e)
         }
     }
@@ -410,6 +543,34 @@ The user is typing a message and has written: '$text'. Provide 3 different ways 
         }
 
         return "$basePrompt\n\n$moodPrompt"
+    }
+
+    private fun buildCustomSystemPrompt(customInstructions: String, context: String): String {
+        val basePrompt = """
+            You are a text enhancement assistant for a smart keyboard.
+            Your job is to improve the user's text while maintaining their intended meaning.
+            Keep responses concise and natural.
+            IMPORTANT: Return ONLY the enhanced text without quotes, explanations, or additional formatting.
+            Do not wrap the response in quotation marks.
+        """.trimIndent()
+
+        return if (context.isNotBlank()) {
+            "$basePrompt\n\n$customInstructions\n\nContext: $context"
+        } else {
+            "$basePrompt\n\n$customInstructions"
+        }
+    }
+
+    private fun buildCustomSuggestionSystemPrompt(customInstructions: String): String {
+        val basePrompt = """
+            You are a smart keyboard text completion assistant. Your job is to help users complete their messages.
+            When given partial text that a user is typing, suggest 3 different ways to COMPLETE or CONTINUE that text.
+            DO NOT respond to the message or have a conversation - only suggest how to finish the user's own message.
+
+            IMPORTANT: Return only the complete suggested messages, one per line, without numbers, bullets, or formatting.
+        """.trimIndent()
+
+        return "$basePrompt\n\n$customInstructions"
     }
 
     private fun parseSuggestions(suggestionsText: String, originalText: String): List<String> {

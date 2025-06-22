@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="160dp"
+    android:layout_height="48dp"
+    android:background="@drawable/mood_item_bg"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:paddingHorizontal="16dp"
+    android:layout_marginBottom="2dp"
+    android:clickable="true"
+    android:focusable="true">
+
+    <!-- Fixed-size emoji container -->
+    <FrameLayout
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:layout_marginEnd="8dp">
+
+        <TextView
+            android:id="@+id/tv_mood_emoji"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:text="❤️"
+            android:textSize="16sp"
+            android:gravity="center" />
+    </FrameLayout>
+
+    <TextView
+        android:id="@+id/tv_mood_title"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:text="Respectful"
+        android:textColor="#FFFFFF"
+        android:textSize="14sp"
+        android:fontFamily="sans-serif-medium"
+        android:gravity="center_vertical"
+        android:singleLine="true"
+        android:ellipsize="end" />
+
+</LinearLayout>

@@ -16,10 +16,20 @@ import android.os.Vibrator
 import android.os.VibrationEffect
 import android.os.Build
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.content.BroadcastReceiver
 import android.graphics.Color
 import android.widget.HorizontalScrollView
 import androidx.core.content.ContextCompat
+import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import com.example.smartkeyboard.ai.AITextProcessor
+import com.example.smartkeyboard.adapter.KeyboardMoodAdapter
+import com.example.smartkeyboard.data.MoodData
+import com.example.smartkeyboard.data.CustomMood
+import com.example.smartkeyboard.manager.CustomMoodManager
+import com.example.smartkeyboard.utils.MoodBroadcastConstants
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -36,12 +46,19 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
     // Mood selection state
     private var moodButtonsContainer: LinearLayout? = null
     private var moodOverlay: View? = null
-    private var btnRespectful: LinearLayout? = null
-    private var btnFunny: LinearLayout? = null
-    private var btnAngry: LinearLayout? = null
+    private var rvMoodSelector: RecyclerView? = null
     private var moodSelectorPill: FrameLayout? = null
     private var moodEmoji: TextView? = null
     private var btnEnhanceText: FrameLayout? = null
+
+    // Dynamic mood system
+    private lateinit var customMoodManager: CustomMoodManager
+    private lateinit var keyboardMoodAdapter: KeyboardMoodAdapter
+    private var allMoods: List<MoodData> = emptyList()
+    private var currentSelectedMood: MoodData? = null
+
+    // Broadcast receiver for real-time mood updates
+    private var moodUpdateReceiver: BroadcastReceiver? = null
 
     // Auto suggestion components
     private var suggestionScrollView: HorizontalScrollView? = null
@@ -56,12 +73,12 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
 
     // Keyboard state
     private var moodButtonsVisible = false
-    private var currentMood = MoodType.RESPECTFUL
     private var isShifted = false
 
     // Haptic feedback
     private var vibrator: Vibrator? = null
 
+    // Legacy MoodType for backward compatibility with AI system
     enum class MoodType {
         NORMAL, RESPECTFUL, FUNNY, ANGRY
     }
@@ -76,11 +93,20 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
         // Initialize vibrator for haptic feedback
         vibrator = getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
 
+        // Initialize dynamic mood system
+        customMoodManager = CustomMoodManager(this)
+
         // Initialize mood buttons
         setupMoodButtons(inputView)
 
         // Initialize suggestion bar
         setupSuggestionBar(inputView)
+
+        // Load and setup dynamic moods
+        loadAndSetupMoods()
+
+        // Register broadcast receiver for real-time mood updates
+        registerMoodUpdateReceiver()
 
         return inputView
     }
@@ -234,24 +260,13 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
         moodOverlay = inputView.findViewById(R.id.mood_overlay)
         moodSelectorPill = inputView.findViewById<FrameLayout>(R.id.mood_selector_pill)
         moodEmoji = inputView.findViewById<TextView>(R.id.mood_emoji)
-        btnRespectful = inputView.findViewById<LinearLayout>(R.id.btn_respectful)
-        btnFunny = inputView.findViewById<LinearLayout>(R.id.btn_funny)
-        btnAngry = inputView.findViewById<LinearLayout>(R.id.btn_angry)
+        rvMoodSelector = inputView.findViewById<RecyclerView>(R.id.rv_mood_selector)
         btnEnhanceText = inputView.findViewById<FrameLayout>(R.id.btn_enhance_text)
 
+        // Setup RecyclerView for dynamic moods
+        rvMoodSelector?.layoutManager = LinearLayoutManager(this)
+
         // Set click listeners with haptic feedback
-        btnRespectful?.setOnClickListener {
-            performHapticFeedback()
-            selectMood(MoodType.RESPECTFUL)
-        }
-        btnFunny?.setOnClickListener {
-            performHapticFeedback()
-            selectMood(MoodType.FUNNY)
-        }
-        btnAngry?.setOnClickListener {
-            performHapticFeedback()
-            selectMood(MoodType.ANGRY)
-        }
         moodSelectorPill?.setOnClickListener {
             performHapticFeedback()
             toggleMoodButtonsVisibility()
@@ -282,29 +297,59 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
         updateMoodPillAppearance()
     }
 
-    private fun selectMood(mood: MoodType) {
-        currentMood = mood
+    /**
+     * Load and setup dynamic moods (custom moods only)
+     */
+    private fun loadAndSetupMoods() {
+        // Get custom moods from storage
+        val customMoods = customMoodManager.getCustomMoods()
 
-        // Add scale animation to selected mood button
-        val selectedButton = when (mood) {
-            MoodType.RESPECTFUL -> btnRespectful
-            MoodType.FUNNY -> btnFunny
-            MoodType.ANGRY -> btnAngry
-            MoodType.NORMAL -> null
-        }
+        // Get all moods (custom moods only)
+        allMoods = MoodData.getAllMoods(customMoods)
 
-        selectedButton?.let { button ->
-            val scaleAnimation = AnimationUtils.loadAnimation(this, R.anim.mood_item_scale)
-            button.startAnimation(scaleAnimation)
-        }
+        // Set first custom mood as selected, or null if no custom moods exist
+        currentSelectedMood = allMoods.firstOrNull()
 
-        updateMoodButtonsUI()
+        // Setup adapter
+        keyboardMoodAdapter = KeyboardMoodAdapter(
+            moods = allMoods,
+            selectedMoodId = currentSelectedMood?.id ?: "",
+            onMoodClick = { mood -> selectDynamicMood(mood) }
+        )
+
+        rvMoodSelector?.adapter = keyboardMoodAdapter
+
+        // Update pill appearance
         updateMoodPillAppearance()
 
-        // Hide mood menu after selection with animation
+        Log.d(TAG, "Loaded ${allMoods.size} custom moods")
+    }
+
+    /**
+     * Select a dynamic mood (default or custom)
+     */
+    private fun selectDynamicMood(mood: MoodData) {
+        performHapticFeedback()
+        currentSelectedMood = mood
+
+        // Update adapter selection
+        keyboardMoodAdapter.updateSelectedMood(mood.id)
+
+        // Update pill appearance
+        updateMoodPillAppearance()
+
+        // Hide mood menu after selection
         if (moodButtonsVisible) {
             toggleMoodButtonsVisibility()
         }
+
+        Log.d(TAG, "Selected mood: ${mood.title} (${mood.id})")
+    }
+
+    // Legacy method - kept for backward compatibility but not used
+    private fun selectMood(mood: MoodType) {
+        // This method is deprecated - use selectDynamicMood instead
+        Log.d(TAG, "Legacy selectMood called with: $mood")
     }
 
     private fun toggleMoodButtonsVisibility() {
@@ -334,62 +379,40 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
         updateMoodPillAppearance()
     }
 
+    // Legacy method - no longer needed with dynamic mood system
     private fun updateMoodButtonsUI() {
-        // Reset all buttons to normal state
-        btnRespectful?.setBackgroundResource(R.drawable.mood_item_bg)
-        btnFunny?.setBackgroundResource(R.drawable.mood_item_bg)
-        btnAngry?.setBackgroundResource(R.drawable.mood_item_bg)
-
-        // Highlight selected mood
-        when (currentMood) {
-            MoodType.RESPECTFUL -> btnRespectful?.setBackgroundResource(R.drawable.google_key_bg_selected)
-            MoodType.FUNNY -> btnFunny?.setBackgroundResource(R.drawable.google_key_bg_selected)
-            MoodType.ANGRY -> btnAngry?.setBackgroundResource(R.drawable.google_key_bg_selected)
-            MoodType.NORMAL -> { /* No button highlighted */ }
-        }
+        // This method is deprecated - mood highlighting is now handled by the RecyclerView adapter
+        Log.d(TAG, "Legacy updateMoodButtonsUI called")
     }
 
     private fun applyMoodTransformation(text: String): String {
-        return when (currentMood) {
-            MoodType.RESPECTFUL -> transformToRespectful(text)
-            MoodType.FUNNY -> transformToFunny(text)
-            MoodType.ANGRY -> transformToAngry(text)
-            MoodType.NORMAL -> text
-        }
-    }
-
-    private fun transformToRespectful(text: String): String {
-        // Simple fallback: just capitalize and add period if needed
-        val respectful = text.replaceFirstChar { it.uppercase() }
-        return if (!respectful.endsWith(".") && !respectful.endsWith("!") && !respectful.endsWith("?")) {
-            "$respectful."
+        // Use dynamic mood transformation
+        val selectedMood = currentSelectedMood
+        return if (selectedMood != null) {
+            applyDynamicMoodTransformation(text, selectedMood)
         } else {
-            respectful
+            text.replaceFirstChar { it.uppercase() }
         }
     }
 
-    private fun transformToFunny(text: String): String {
-        // Simple fallback: add emoji
-        return "$text 😄"
-    }
+    // Removed old mood transformation methods - no longer needed with custom moods only
 
-    private fun transformToAngry(text: String): String {
-        // Simple fallback: uppercase with exclamation
-        return text.uppercase() + "!"
+    /**
+     * Apply mood transformation for custom moods (simple fallback)
+     */
+    private fun applyDynamicMoodTransformation(text: String, mood: MoodData): String {
+        // For custom moods, just capitalize as a simple fallback
+        // Real enhancement should use AI with custom instructions
+        return text.replaceFirstChar { it.uppercase() }
     }
 
     private fun updateMoodPillAppearance() {
-        // Update mood emoji in the pill
-        val moodEmojiText = when (currentMood) {
-            MoodType.RESPECTFUL -> "❤️"
-            MoodType.FUNNY -> "😊"
-            MoodType.ANGRY -> "😠"
-            MoodType.NORMAL -> "❤️"
-        }
+        // Update mood emoji in the pill based on selected custom mood
+        val moodEmojiText = currentSelectedMood?.emoji ?: "🎭"
         moodEmoji?.text = moodEmojiText
 
-        // Highlight pill if a mood is selected with glowing outline (Respectful is default, so always highlighted)
-        moodSelectorPill?.isSelected = true
+        // Highlight pill if a mood is selected, dim if no moods available
+        moodSelectorPill?.isSelected = currentSelectedMood != null
     }
 
     /**
@@ -451,33 +474,34 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
     }
 
     /**
-     * Enhance text using AI
+     * Enhance text using AI with dynamic mood support
      */
     private fun enhanceTextWithAI(text: String) {
         serviceScope.launch {
             try {
-                val aiMood = when (currentMood) {
-                    MoodType.RESPECTFUL -> AITextProcessor.MoodType.RESPECTFUL
-                    MoodType.FUNNY -> AITextProcessor.MoodType.FUNNY
-                    MoodType.ANGRY -> AITextProcessor.MoodType.ANGRY
-                    MoodType.NORMAL -> AITextProcessor.MoodType.NORMAL
-                }
+                val selectedMood = currentSelectedMood
 
-                val result = aiTextProcessor?.enhanceText(text, aiMood)
-                result?.fold(
-                    onSuccess = { enhancedText ->
-                        // Now replace the text with AI response
-                        replaceAllTextWithEnhanced(enhancedText)
-                    },
-                    onFailure = { error ->
-                        Log.w(TAG, "AI enhancement failed, using local transformation", error)
-                        val fallbackText = applyMoodTransformation(text)
-                        replaceAllTextWithEnhanced(fallbackText)
-                    }
-                )
+                if (selectedMood != null && selectedMood.instructions != null) {
+                    // All moods are now custom moods with instructions
+                    val result = aiTextProcessor?.enhanceTextWithCustomInstructions(text, selectedMood.instructions!!)
+                    result?.fold(
+                        onSuccess = { enhancedText ->
+                            replaceAllTextWithEnhanced(enhancedText)
+                        },
+                        onFailure = { error ->
+                            Log.w(TAG, "Custom mood AI enhancement failed, using fallback", error)
+                            val fallbackText = text.replaceFirstChar { it.uppercase() }
+                            replaceAllTextWithEnhanced(fallbackText)
+                        }
+                    )
+                } else {
+                    // No mood selected or no instructions, use simple enhancement
+                    Log.w(TAG, "No custom mood selected or no instructions, using simple fallback")
+                    replaceAllTextWithEnhanced(text.replaceFirstChar { it.uppercase() })
+                }
             } catch (e: Exception) {
                 Log.e(TAG, "Error in AI enhancement", e)
-                val fallbackText = applyMoodTransformation(text)
+                val fallbackText = text.replaceFirstChar { it.uppercase() }
                 replaceAllTextWithEnhanced(fallbackText)
             }
         }
@@ -541,17 +565,11 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
     }
 
     /**
-     * Enhance text using AI (replaces old local mood transformations)
+     * Enhance text using local transformations (fallback when AI fails)
      */
     private fun enhanceTextLocally(text: String): String {
-        // This function is now deprecated - we use AI for all enhancements
-        // Only used as fallback when AI completely fails
-        return when (currentMood) {
-            MoodType.RESPECTFUL -> "Please $text"
-            MoodType.FUNNY -> "$text 😄"
-            MoodType.ANGRY -> text.uppercase() + "!"
-            MoodType.NORMAL -> text.replaceFirstChar { it.uppercase() }
-        }
+        // Since all moods are now custom, just provide basic enhancement
+        return text.replaceFirstChar { it.uppercase() }
     }
 
     /**
@@ -613,19 +631,20 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
                 return
             }
 
-            val aiMood = when (currentMood) {
-                MoodType.RESPECTFUL -> AITextProcessor.MoodType.RESPECTFUL
-                MoodType.FUNNY -> AITextProcessor.MoodType.FUNNY
-                MoodType.ANGRY -> AITextProcessor.MoodType.ANGRY
-                MoodType.NORMAL -> AITextProcessor.MoodType.NORMAL
-            }
-
-            Log.d(TAG, "Using AI with mood: $currentMood -> $aiMood for text: '$text'")
+            val selectedMood = currentSelectedMood
+            Log.d(TAG, "Using dynamic mood: ${selectedMood?.title} (${selectedMood?.id}) for text: '$text'")
 
             // Generate AI suggestions with shorter timeout
             try {
                 val result = withTimeout(3000L) { // 3 second timeout for suggestions
-                    aiTextProcessor!!.generateSuggestions(text, aiMood)
+                    if (selectedMood != null && selectedMood.instructions != null) {
+                        // All moods are now custom moods with instructions
+                        aiTextProcessor!!.generateSuggestionsWithCustomInstructions(text, selectedMood.instructions!!)
+                    } else {
+                        // No mood selected or no instructions, use simple suggestions
+                        Log.w(TAG, "No custom mood selected or no instructions for suggestions")
+                        Result.success(listOf(text, text.replaceFirstChar { it.uppercase() }))
+                    }
                 }
 
                 result.fold(
@@ -670,31 +689,17 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
         // Add original text first
         suggestions.add(text)
 
-        // Add simple mood-based variations (no hardcoded responses)
-        when (currentMood) {
-            MoodType.RESPECTFUL -> {
-                val respectful = text.replaceFirstChar { it.uppercase() }
-
-                // Add "please" if it's a request-like message
-                if (text.contains("can you", ignoreCase = true) ||
-                    text.contains("could you", ignoreCase = true) ||
-                    text.contains("would you", ignoreCase = true)) {
-                    suggestions.add("$respectful, please")
-                } else if (!respectful.endsWith(".") && !respectful.endsWith("!") && !respectful.endsWith("?")) {
-                    suggestions.add("$respectful.")
-                } else {
-                    suggestions.add(respectful)
-                }
+        // Add simple fallback suggestions (no mood-specific logic since all moods are custom)
+        val selectedMood = currentSelectedMood
+        if (selectedMood != null) {
+            // For custom moods, provide basic variations
+            suggestions.add(text.replaceFirstChar { it.uppercase() })
+            if (!text.endsWith(".") && !text.endsWith("!") && !text.endsWith("?")) {
+                suggestions.add("${text.replaceFirstChar { it.uppercase() }}.")
             }
-            MoodType.FUNNY -> {
-                suggestions.add("$text 😄")
-            }
-            MoodType.ANGRY -> {
-                suggestions.add(text.uppercase() + "!")
-            }
-            MoodType.NORMAL -> {
-                suggestions.add(text.replaceFirstChar { it.uppercase() })
-            }
+        } else {
+            // No mood selected, just capitalize
+            suggestions.add(text.replaceFirstChar { it.uppercase() })
         }
 
         // Remove duplicates while preserving order

@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="@drawable/mood_item_bg"
+    android:padding="16dp"
+    android:layout_marginBottom="12dp"
+    android:elevation="2dp">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/tv_mood_emoji"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="🎭"
+            android:textSize="20sp"
+            android:layout_marginEnd="12dp" />
+
+        <TextView
+            android:id="@+id/tv_mood_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="Professional"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:textColor="#FFFFFF" />
+
+        <ImageButton
+            android:id="@+id/btn_edit_mood"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:src="@android:drawable/ic_menu_edit"
+            android:tint="#CCCCCC"
+            android:layout_marginEnd="8dp"
+            android:contentDescription="Edit mood" />
+
+        <ImageButton
+            android:id="@+id/btn_delete_mood"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:src="@android:drawable/ic_menu_delete"
+            android:tint="#FF6B6B"
+            android:contentDescription="Delete mood" />
+
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/tv_mood_instructions"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Make the text more professional and formal..."
+        android:textSize="14sp"
+        android:textColor="#CCCCCC"
+        android:layout_marginTop="8dp"
+        android:maxLines="2"
+        android:ellipsize="end" />
+
+</LinearLayout>
