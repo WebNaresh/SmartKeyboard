@@ -180,7 +180,7 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
                 handleShift()
             }
             -1000 -> {
-                // Spacer key - do nothing (invisible centering keys)
+                // Spacer key - do nothing (centering spacer keys)
                 Log.d(TAG, "Spacer key pressed - ignoring")
             }
             else -> {

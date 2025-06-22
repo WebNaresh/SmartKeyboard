@@ -25,7 +25,7 @@ class CenteredKeyboard(context: Context, xmlLayoutResId: Int) : Keyboard(context
             }.sortedBy { it.x } // Sort by X position to maintain order
 
             if (secondRowKeys.size == 9) { // Should be 9 keys: A-S-D-F-G-H-J-K-L
-                centerKeys(secondRowKeys)
+                centerKeysWithMargins(secondRowKeys)
                 android.util.Log.d("CenteredKeyboard", "Successfully centered second row with ${secondRowKeys.size} keys")
             } else {
                 android.util.Log.w("CenteredKeyboard", "Expected 9 keys in second row, found ${secondRowKeys.size}")
@@ -37,29 +37,36 @@ class CenteredKeyboard(context: Context, xmlLayoutResId: Int) : Keyboard(context
     }
     
     /**
-     * Center the given keys by adjusting their X positions
+     * Center the given keys by setting them to 10% width and adding margins
      */
-    private fun centerKeys(keysToCenter: List<Key>) {
+    private fun centerKeysWithMargins(keysToCenter: List<Key>) {
         if (keysToCenter.isEmpty()) return
 
         // Get keyboard dimensions
         val totalKeyboardWidth = minWidth
-        val keyWidth = keysToCenter.first().width
-        val horizontalGap = 8 // 8dp gap between keys (from XML)
 
-        // Calculate total width needed for 9 keys with gaps
-        val totalKeysWidth = (keysToCenter.size * keyWidth) + ((keysToCenter.size - 1) * horizontalGap)
+        // Force key width to be exactly 10% of keyboard width (same as first row)
+        val keyWidth = (totalKeyboardWidth * 0.10).toInt()
 
-        // Calculate the left margin to center the row
+        // Calculate total width needed for 9 keys at 10% each = 90%
+        val totalKeysWidth = keyWidth * 9
+
+        // Calculate left margin to center the row (5% of keyboard width)
         val leftMargin = (totalKeyboardWidth - totalKeysWidth) / 2
 
-        android.util.Log.d("CenteredKeyboard", "Centering: keyboard width=$totalKeyboardWidth, keys width=$totalKeysWidth, left margin=$leftMargin")
+        android.util.Log.d("CenteredKeyboard", "Centering: keyboard width=$totalKeyboardWidth, forced key width=$keyWidth (10%), total keys width=$totalKeysWidth, left margin=$leftMargin")
 
-        // Adjust X positions of all keys in the row
+        // Set both width and X positions for all keys in the row
         keysToCenter.forEachIndexed { index, key ->
-            val newX = leftMargin + (index * (keyWidth + horizontalGap))
-            android.util.Log.d("CenteredKeyboard", "Key ${key.codes[0].toChar()}: moving from ${key.x} to $newX")
+            // Force width to 10% of keyboard width
+            key.width = keyWidth
+
+            // Position with left margin + index offset
+            val newX = leftMargin + (index * keyWidth)
+            android.util.Log.d("CenteredKeyboard", "Key ${key.codes[0].toChar()}: setting width=${key.width}, moving x from ${key.x} to $newX")
             key.x = newX
         }
+
+        android.util.Log.d("CenteredKeyboard", "Second row centered with ${leftMargin}px margin on each side")
     }
 }
