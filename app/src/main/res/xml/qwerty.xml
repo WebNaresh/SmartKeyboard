@@ -19,7 +19,7 @@
     </Row>
     <Row>
         <!-- Left spacer: 5% to center the 9-key row -->
-        <Key android:codes="-1000" android:keyWidth="5%p" android:keyEdgeFlags="left" android:keyLabel="" android:keyBackground="@drawable/invisible_spacer_bg" />
+        <Key android:codes="-1000" android:keyWidth="5%p" android:keyEdgeFlags="left" android:keyLabel=" " android:keyBackground="@drawable/invisible_spacer_bg" />
         <Key android:codes="97" android:keyLabel="a" android:keyWidth="10%p" android:keyBackground="@drawable/custom_key_bg" />
         <Key android:codes="115" android:keyLabel="s" android:keyWidth="10%p" android:keyBackground="@drawable/custom_key_bg" />
         <Key android:codes="100" android:keyLabel="d" android:keyWidth="10%p" android:keyBackground="@drawable/custom_key_bg" />
@@ -30,7 +30,7 @@
         <Key android:codes="107" android:keyLabel="k" android:keyWidth="10%p" android:keyBackground="@drawable/custom_key_bg" />
         <Key android:codes="108" android:keyLabel="l" android:keyWidth="10%p" android:keyBackground="@drawable/custom_key_bg" />
         <!-- Right spacer: 5% to center the 9-key row -->
-        <Key android:codes="-1000" android:keyWidth="5%p" android:keyEdgeFlags="right" android:keyLabel="" android:keyBackground="@drawable/invisible_spacer_bg" />
+        <Key android:codes="-1000" android:keyWidth="5%p" android:keyEdgeFlags="right" android:keyLabel=" " android:keyBackground="@drawable/invisible_spacer_bg" />
     </Row>
     <Row>
         <Key android:codes="-1" android:keyLabel="⇧" android:keyWidth="15%p" android:isModifier="true" android:isSticky="true" android:keyEdgeFlags="left" android:keyBackground="@drawable/custom_key_bg" />
@@ -46,7 +46,7 @@
     <Row android:rowEdgeFlags="bottom" android:keyHeight="42dp">
         <Key android:codes="63" android:keyLabel="?" android:keyWidth="15%p" android:keyEdgeFlags="left" android:keyBackground="@drawable/custom_key_bg" />
         <Key android:codes="44" android:keyLabel="," android:keyWidth="10%p" android:keyBackground="@drawable/custom_key_bg" />
-        <Key android:codes="32" android:keyLabel="" android:keyWidth="50%p" android:isRepeatable="true" android:keyBackground="@drawable/space_key_bg" />
+        <Key android:codes="32" android:keyLabel=" " android:keyWidth="50%p" android:isRepeatable="true" android:keyBackground="@drawable/space_key_bg" />
         <Key android:codes="46" android:keyLabel="." android:keyWidth="10%p" android:keyBackground="@drawable/custom_key_bg" />
         <Key android:codes="-4" android:keyLabel="⏎" android:keyWidth="15%p" android:keyBackground="@drawable/custom_key_bg" />
     </Row>

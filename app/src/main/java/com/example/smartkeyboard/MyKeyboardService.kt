@@ -258,10 +258,18 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
     }
 
     private fun handleShift() {
-        if (keyboard != null) {
-            isShifted = !keyboard!!.isShifted
-            keyboard!!.isShifted = isShifted
-            keyboardView?.invalidateAllKeys()
+        try {
+            if (keyboard != null) {
+                isShifted = !keyboard!!.isShifted
+                keyboard!!.isShifted = isShifted
+                keyboardView?.invalidateAllKeys()
+                Log.d(TAG, "Shift toggled: isShifted = $isShifted")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error handling shift key", e)
+            // Reset shift state on error
+            isShifted = false
+            keyboard?.isShifted = false
         }
     }
 
@@ -452,12 +460,19 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
     }
 
     private fun applyMoodTransformation(text: String): String {
-        // Use dynamic mood transformation
+        // Use dynamic mood transformation with safety check
+        if (text.isEmpty()) return text
+
         val selectedMood = currentSelectedMood
         return if (selectedMood != null) {
             applyDynamicMoodTransformation(text, selectedMood)
         } else {
-            text.replaceFirstChar { it.uppercase() }
+            try {
+                text.replaceFirstChar { it.uppercase() }
+            } catch (e: Exception) {
+                Log.w(TAG, "Error applying mood transformation", e)
+                text
+            }
         }
     }
 
@@ -469,7 +484,14 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
     private fun applyDynamicMoodTransformation(text: String, mood: MoodData): String {
         // For custom moods, just capitalize as a simple fallback
         // Real enhancement should use AI with custom instructions
-        return text.replaceFirstChar { it.uppercase() }
+        if (text.isEmpty()) return text
+
+        return try {
+            text.replaceFirstChar { it.uppercase() }
+        } catch (e: Exception) {
+            Log.w(TAG, "Error applying dynamic mood transformation", e)
+            text
+        }
     }
 
     private fun updateMoodPillAppearance() {
@@ -564,18 +586,40 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
                         },
                         onFailure = { error ->
                             Log.w(TAG, "Custom mood AI enhancement failed, using fallback", error)
-                            val fallbackText = text.replaceFirstChar { it.uppercase() }
+                            val fallbackText = if (text.isEmpty()) text else {
+                                try {
+                                    text.replaceFirstChar { it.uppercase() }
+                                } catch (e: Exception) {
+                                    Log.w(TAG, "Error in fallback text transformation", e)
+                                    text
+                                }
+                            }
                             replaceAllTextWithEnhanced(fallbackText)
                         }
                     )
                 } else {
                     // No mood selected or no instructions, use simple enhancement
                     Log.w(TAG, "No custom mood selected or no instructions, using simple fallback")
-                    replaceAllTextWithEnhanced(text.replaceFirstChar { it.uppercase() })
+                    val fallbackText = if (text.isEmpty()) text else {
+                        try {
+                            text.replaceFirstChar { it.uppercase() }
+                        } catch (e: Exception) {
+                            Log.w(TAG, "Error in simple enhancement fallback", e)
+                            text
+                        }
+                    }
+                    replaceAllTextWithEnhanced(fallbackText)
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error in AI enhancement", e)
-                val fallbackText = text.replaceFirstChar { it.uppercase() }
+                val fallbackText = if (text.isEmpty()) text else {
+                    try {
+                        text.replaceFirstChar { it.uppercase() }
+                    } catch (e2: Exception) {
+                        Log.w(TAG, "Error in exception fallback text transformation", e2)
+                        text
+                    }
+                }
                 replaceAllTextWithEnhanced(fallbackText)
             }
         }
@@ -643,7 +687,14 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
      */
     private fun enhanceTextLocally(text: String): String {
         // Since all moods are now custom, just provide basic enhancement
-        return text.replaceFirstChar { it.uppercase() }
+        if (text.isEmpty()) return text
+
+        return try {
+            text.replaceFirstChar { it.uppercase() }
+        } catch (e: Exception) {
+            Log.w(TAG, "Error enhancing text locally", e)
+            text
+        }
     }
 
     /**
@@ -718,7 +769,15 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
                     } else {
                         // No mood selected or no instructions, use simple suggestions
                         Log.w(TAG, "No custom mood selected or no instructions for suggestions")
-                        Result.success(listOf(text, text.replaceFirstChar { it.uppercase() }))
+                        val capitalizedText = if (text.isEmpty()) text else {
+                            try {
+                                text.replaceFirstChar { it.uppercase() }
+                            } catch (e: Exception) {
+                                Log.w(TAG, "Error capitalizing text for suggestions", e)
+                                text
+                            }
+                        }
+                        Result.success(listOf(text, capitalizedText))
                     }
                 }
 
@@ -766,15 +825,26 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
 
         // Add simple fallback suggestions (no mood-specific logic since all moods are custom)
         val selectedMood = currentSelectedMood
-        if (selectedMood != null) {
+        if (selectedMood != null && text.isNotEmpty()) {
             // For custom moods, provide basic variations
-            suggestions.add(text.replaceFirstChar { it.uppercase() })
-            if (!text.endsWith(".") && !text.endsWith("!") && !text.endsWith("?")) {
-                suggestions.add("${text.replaceFirstChar { it.uppercase() }}.")
+            try {
+                val capitalizedText = text.replaceFirstChar { it.uppercase() }
+                suggestions.add(capitalizedText)
+                if (!text.endsWith(".") && !text.endsWith("!") && !text.endsWith("?")) {
+                    suggestions.add("$capitalizedText.")
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Error creating fallback suggestions", e)
+                suggestions.add(text)
             }
-        } else {
+        } else if (text.isNotEmpty()) {
             // No mood selected, just capitalize
-            suggestions.add(text.replaceFirstChar { it.uppercase() })
+            try {
+                suggestions.add(text.replaceFirstChar { it.uppercase() })
+            } catch (e: Exception) {
+                Log.w(TAG, "Error capitalizing text for fallback", e)
+                suggestions.add(text)
+            }
         }
 
         // Remove duplicates while preserving order
@@ -971,7 +1041,13 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
                 addAction(MoodBroadcastConstants.ACTION_MOODS_REFRESHED)
             }
 
-            registerReceiver(moodUpdateReceiver, intentFilter)
+            // Use RECEIVER_NOT_EXPORTED for internal app communication (Android 14+ requirement)
+            ContextCompat.registerReceiver(
+                this@MyKeyboardService,
+                moodUpdateReceiver,
+                intentFilter,
+                ContextCompat.RECEIVER_NOT_EXPORTED
+            )
             Log.d(TAG, "Mood update receiver registered")
         }
     }

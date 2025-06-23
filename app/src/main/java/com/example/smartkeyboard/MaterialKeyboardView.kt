@@ -190,6 +190,28 @@ class MaterialKeyboardView @JvmOverloads constructor(
         }
     }
 
+    /**
+     * Override to safely handle keyboard operations and prevent StringIndexOutOfBoundsException
+     */
+    override fun setKeyboard(keyboard: Keyboard?) {
+        // Ensure all keys have non-empty labels to prevent crashes in adjustCase()
+        keyboard?.let { kb ->
+            try {
+                kb.keys.forEach { key ->
+                    // Check if key label is null or empty and fix it
+                    if (key.label.isNullOrEmpty()) {
+                        // Use a single space for empty labels to prevent charAt(0) crashes
+                        key.label = " "
+                    }
+                }
+            } catch (e: Exception) {
+                // If we can't modify the keys, log the error but continue
+                android.util.Log.w("MaterialKeyboardView", "Could not fix empty key labels", e)
+            }
+        }
+        super.setKeyboard(keyboard)
+    }
+
     @Deprecated("Using deprecated KeyboardView API")
     override fun onTouchEvent(me: MotionEvent?): Boolean {
         me?.let { event ->
@@ -316,8 +338,23 @@ class MaterialKeyboardView @JvmOverloads constructor(
             }
         }
 
-        // Only call super for non-long-press keys
-        return if (isLongPressKey) true else super.onTouchEvent(me)
+        // Only call super for non-long-press keys, with safety wrapper
+        return if (isLongPressKey) {
+            true
+        } else {
+            try {
+                super.onTouchEvent(me)
+            } catch (e: StringIndexOutOfBoundsException) {
+                // Catch and log StringIndexOutOfBoundsException from KeyboardView.adjustCase()
+                android.util.Log.w("MaterialKeyboardView", "Caught StringIndexOutOfBoundsException in onTouchEvent", e)
+                // Return true to indicate the event was handled
+                true
+            } catch (e: Exception) {
+                // Catch any other exceptions that might occur
+                android.util.Log.w("MaterialKeyboardView", "Caught exception in onTouchEvent", e)
+                true
+            }
+        }
     }
 
     private fun handleLongPress(key: Keyboard.Key) {
