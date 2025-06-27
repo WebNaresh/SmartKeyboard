@@ -144,6 +144,9 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
     override fun onKey(primaryCode: Int, keyCodes: IntArray?) {
         when (primaryCode) {
             Keyboard.KEYCODE_DELETE -> {
+                // Save text state before deletion (for undo functionality)
+                saveTextState()
+
                 // Handle backspace
                 val inputConnection = currentInputConnection
                 inputConnection?.deleteSurroundingText(1, 0)
@@ -677,6 +680,9 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
             }
 
             Log.d(TAG, "Enhancing text: '$currentText'")
+
+            // Save text state before enhancement (for undo functionality)
+            saveTextState()
 
             // Always try to use AI enhancement first
             if (isAIEnabled && aiTextProcessor != null) {
