@@ -193,6 +193,11 @@ class SettingsActivity : AppCompatActivity() {
             rvCustomMoods.post {
                 rvCustomMoods.smoothScrollToPosition(customMoodAdapter.itemCount - 1)
             }
+
+            // Send explicit refresh broadcast to ensure keyboard updates
+            sendMoodRefreshBroadcast()
+
+            android.util.Log.d("SettingsActivity", "Custom mood '$title' created and broadcast sent")
         } else {
             Toast.makeText(this, "❌ Failed to create custom mood", Toast.LENGTH_SHORT).show()
         }
@@ -237,6 +242,8 @@ class SettingsActivity : AppCompatActivity() {
                 if (customMoodManager.updateCustomMood(mood, updatedMood)) {
                     Toast.makeText(this, "✅ Mood '$newTitle' updated successfully!", Toast.LENGTH_LONG).show()
                     loadCustomMoods()
+                    sendMoodRefreshBroadcast()
+                    android.util.Log.d("SettingsActivity", "Custom mood '$newTitle' updated and broadcast sent")
                 } else {
                     Toast.makeText(this, "❌ Failed to update mood", Toast.LENGTH_SHORT).show()
                 }
@@ -253,6 +260,8 @@ class SettingsActivity : AppCompatActivity() {
                 if (customMoodManager.deleteCustomMood(mood)) {
                     Toast.makeText(this, "🗑️ Mood '${mood.title}' deleted successfully!", Toast.LENGTH_LONG).show()
                     loadCustomMoods()
+                    sendMoodRefreshBroadcast()
+                    android.util.Log.d("SettingsActivity", "Custom mood '${mood.title}' deleted and broadcast sent")
                 } else {
                     Toast.makeText(this, "❌ Failed to delete mood", Toast.LENGTH_SHORT).show()
                 }
@@ -265,8 +274,17 @@ class SettingsActivity : AppCompatActivity() {
      * Send broadcast to notify keyboard to refresh moods
      */
     private fun sendMoodRefreshBroadcast() {
-        val intent = android.content.Intent(MoodBroadcastConstants.ACTION_MOODS_REFRESHED)
-        sendBroadcast(intent)
+        try {
+            val intent = android.content.Intent(MoodBroadcastConstants.ACTION_MOODS_REFRESHED).apply {
+                // Set explicit package to ensure broadcast reaches our app
+                setPackage(packageName)
+                addFlags(android.content.Intent.FLAG_INCLUDE_STOPPED_PACKAGES)
+            }
+            sendBroadcast(intent)
+            android.util.Log.d("SettingsActivity", "Sent mood refresh broadcast")
+        } catch (e: Exception) {
+            android.util.Log.e("SettingsActivity", "Error sending mood refresh broadcast", e)
+        }
     }
 
     companion object {

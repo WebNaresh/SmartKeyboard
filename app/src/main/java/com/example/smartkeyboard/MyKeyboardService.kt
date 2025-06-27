@@ -319,14 +319,18 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
      * Load and setup dynamic moods (custom moods only)
      */
     private fun loadAndSetupMoods() {
+        Log.d(TAG, "Loading and setting up dynamic moods...")
+
         // Get custom moods from storage
         val customMoods = customMoodManager.getCustomMoods()
+        Log.d(TAG, "Retrieved ${customMoods.size} custom moods from storage")
 
         // Get all moods (custom moods only)
         allMoods = MoodData.getAllMoods(customMoods)
 
         // Set first custom mood as selected, or null if no custom moods exist
         currentSelectedMood = allMoods.firstOrNull()
+        Log.d(TAG, "Selected initial mood: ${currentSelectedMood?.title ?: "none"}")
 
         // Setup adapter
         keyboardMoodAdapter = KeyboardMoodAdapter(
@@ -336,11 +340,18 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
         )
 
         rvMoodSelector?.adapter = keyboardMoodAdapter
+        Log.d(TAG, "Keyboard mood adapter initialized")
 
         // Update pill appearance
         updateMoodPillAppearance()
 
-        Log.d(TAG, "Loaded ${allMoods.size} custom moods")
+        Log.d(TAG, "Successfully loaded ${allMoods.size} custom moods")
+
+        // Force a refresh from storage to ensure we have the latest data
+        serviceScope.launch {
+            delay(100) // Small delay to ensure everything is initialized
+            reloadMoodsFromStorage()
+        }
     }
 
     /**
@@ -1004,8 +1015,12 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
      */
     private fun registerMoodUpdateReceiver() {
         if (moodUpdateReceiver == null) {
+            Log.d(TAG, "Registering mood update broadcast receiver...")
+
             moodUpdateReceiver = object : BroadcastReceiver() {
                 override fun onReceive(context: Context?, intent: Intent?) {
+                    Log.d(TAG, "Broadcast received: ${intent?.action}")
+
                     when (intent?.action) {
                         MoodBroadcastConstants.ACTION_MOOD_CREATED -> {
                             val moodId = intent.getStringExtra(MoodBroadcastConstants.EXTRA_MOOD_ID)
@@ -1029,6 +1044,9 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
                         MoodBroadcastConstants.ACTION_MOODS_REFRESHED -> {
                             Log.d(TAG, "Received moods refresh broadcast")
                             reloadMoodsFromStorage()
+                        }
+                        else -> {
+                            Log.w(TAG, "Received unknown broadcast action: ${intent?.action}")
                         }
                     }
                 }
@@ -1071,10 +1089,32 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
      * Handle mood created event
      */
     private fun handleMoodCreated(moodId: String?, moodTitle: String?) {
+        Log.d(TAG, "Handling mood created event: $moodTitle ($moodId)")
+
         if (moodId != null && moodTitle != null) {
             // Reload moods to include the new one
             reloadMoodsFromStorage()
-            Log.d(TAG, "Mood created: $moodTitle")
+
+            // If this is the first mood and no mood is currently selected, select it
+            if (currentSelectedMood == null && allMoods.isNotEmpty()) {
+                val newMood = allMoods.find { it.id == moodId }
+                if (newMood != null) {
+                    currentSelectedMood = newMood
+                    Log.d(TAG, "Auto-selected first mood: $moodTitle")
+
+                    // Update adapter selection
+                    if (::keyboardMoodAdapter.isInitialized) {
+                        keyboardMoodAdapter.updateSelectedMood(moodId)
+                    }
+
+                    // Update pill appearance
+                    updateMoodPillAppearance()
+                }
+            }
+
+            Log.d(TAG, "Successfully handled mood created: $moodTitle")
+        } else {
+            Log.w(TAG, "Invalid mood created event - missing ID or title")
         }
     }
 
@@ -1123,25 +1163,64 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
      */
     private fun reloadMoodsFromStorage() {
         try {
+            Log.d(TAG, "Starting mood reload from storage...")
+
             // Get updated custom moods from storage
             val customMoods = customMoodManager.getCustomMoods()
+            Log.d(TAG, "Retrieved ${customMoods.size} custom moods from storage")
 
             // Update all moods list
+            val oldMoodCount = allMoods.size
             allMoods = MoodData.getAllMoods(customMoods)
+            Log.d(TAG, "Updated allMoods: $oldMoodCount -> ${allMoods.size} moods")
 
-            // Update adapter
-            if (::keyboardMoodAdapter.isInitialized) {
-                keyboardMoodAdapter.updateMoods(allMoods)
-                keyboardMoodAdapter.updateSelectedMood(currentSelectedMood?.id ?: "")
+            // Ensure UI updates happen on main thread
+            serviceScope.launch(Dispatchers.Main) {
+                try {
+                    // Update adapter
+                    if (::keyboardMoodAdapter.isInitialized) {
+                        Log.d(TAG, "Updating keyboard mood adapter...")
+                        keyboardMoodAdapter.updateMoods(allMoods)
+
+                        // Validate current selection still exists
+                        val currentMoodStillExists = currentSelectedMood?.let { mood ->
+                            allMoods.any { it.id == mood.id }
+                        } ?: false
+
+                        if (!currentMoodStillExists && allMoods.isNotEmpty()) {
+                            // Select first mood if current selection is invalid
+                            currentSelectedMood = allMoods.first()
+                            Log.d(TAG, "Current mood no longer exists, selected first available: ${currentSelectedMood?.title}")
+                        }
+
+                        keyboardMoodAdapter.updateSelectedMood(currentSelectedMood?.id ?: "")
+                        Log.d(TAG, "Adapter updated successfully")
+                    } else {
+                        Log.w(TAG, "KeyboardMoodAdapter not initialized yet")
+                    }
+
+                    // Update pill appearance
+                    updateMoodPillAppearance()
+                    Log.d(TAG, "Mood pill appearance updated")
+
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error updating UI during mood reload", e)
+                }
             }
 
-            // Update pill appearance
-            updateMoodPillAppearance()
-
-            Log.d(TAG, "Reloaded ${allMoods.size} moods from storage")
+            Log.d(TAG, "Successfully reloaded ${allMoods.size} moods from storage")
         } catch (e: Exception) {
             Log.e(TAG, "Error reloading moods from storage", e)
         }
+    }
+
+    /**
+     * Public method to test if the keyboard service is receiving broadcasts
+     * This can be called from external components to verify connectivity
+     */
+    fun testBroadcastReceiver() {
+        Log.d(TAG, "Broadcast receiver test - Service is active and listening")
+        reloadMoodsFromStorage()
     }
 
     companion object {

@@ -145,14 +145,33 @@ class CustomMoodManager(private val context: Context) {
         moodTitle: String,
         oldMoodId: String? = null
     ) {
-        val intent = Intent(action).apply {
-            putExtra(MoodBroadcastConstants.EXTRA_MOOD_ID, moodId)
-            putExtra(MoodBroadcastConstants.EXTRA_MOOD_TITLE, moodTitle)
-            oldMoodId?.let {
-                putExtra(MoodBroadcastConstants.EXTRA_OLD_MOOD_ID, it)
+        try {
+            val intent = Intent(action).apply {
+                // Set explicit package to ensure broadcast reaches our app
+                setPackage(context.packageName)
+                putExtra(MoodBroadcastConstants.EXTRA_MOOD_ID, moodId)
+                putExtra(MoodBroadcastConstants.EXTRA_MOOD_TITLE, moodTitle)
+                oldMoodId?.let {
+                    putExtra(MoodBroadcastConstants.EXTRA_OLD_MOOD_ID, it)
+                }
+                // Add flags to ensure delivery
+                addFlags(Intent.FLAG_INCLUDE_STOPPED_PACKAGES)
             }
+
+            android.util.Log.d("CustomMoodManager", "Sending broadcast: $action for mood: $moodTitle ($moodId)")
+            context.sendBroadcast(intent)
+
+            // Also send a general refresh broadcast as backup
+            val refreshIntent = Intent(MoodBroadcastConstants.ACTION_MOODS_REFRESHED).apply {
+                setPackage(context.packageName)
+                addFlags(Intent.FLAG_INCLUDE_STOPPED_PACKAGES)
+            }
+            context.sendBroadcast(refreshIntent)
+            android.util.Log.d("CustomMoodManager", "Sent backup refresh broadcast")
+
+        } catch (e: Exception) {
+            android.util.Log.e("CustomMoodManager", "Error sending mood broadcast", e)
         }
-        context.sendBroadcast(intent)
     }
 
     companion object {

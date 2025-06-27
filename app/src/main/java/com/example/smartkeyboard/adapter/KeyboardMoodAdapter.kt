@@ -46,22 +46,59 @@ class KeyboardMoodAdapter(
     override fun getItemCount(): Int = moods.size
 
     fun updateMoods(newMoods: List<MoodData>) {
+        android.util.Log.d("KeyboardMoodAdapter", "Updating moods: ${newMoods.size} moods")
+
+        // Check if the data actually changed to avoid unnecessary updates
+        val oldSize = moods.size
+        val newSize = newMoods.size
+
         moods = newMoods
-        notifyDataSetChanged()
+
+        // Use more efficient notification methods when possible
+        when {
+            oldSize == 0 && newSize > 0 -> {
+                // First time loading moods
+                notifyDataSetChanged()
+                android.util.Log.d("KeyboardMoodAdapter", "Initial mood load: $newSize moods")
+            }
+            oldSize < newSize -> {
+                // New moods added
+                notifyItemRangeInserted(oldSize, newSize - oldSize)
+                android.util.Log.d("KeyboardMoodAdapter", "Added ${newSize - oldSize} new moods")
+            }
+            oldSize > newSize -> {
+                // Moods removed
+                notifyItemRangeRemoved(newSize, oldSize - newSize)
+                android.util.Log.d("KeyboardMoodAdapter", "Removed ${oldSize - newSize} moods")
+            }
+            else -> {
+                // Same count, might be updates
+                notifyDataSetChanged()
+                android.util.Log.d("KeyboardMoodAdapter", "Updated existing moods")
+            }
+        }
     }
 
     fun updateSelectedMood(moodId: String) {
+        android.util.Log.d("KeyboardMoodAdapter", "Updating selected mood to: $moodId")
+
         val oldSelectedIndex = moods.indexOfFirst { it.id == selectedMoodId }
         val newSelectedIndex = moods.indexOfFirst { it.id == moodId }
-        
+
         selectedMoodId = moodId
-        
+
         // Update only the affected items
         if (oldSelectedIndex != -1) {
             notifyItemChanged(oldSelectedIndex)
+            android.util.Log.d("KeyboardMoodAdapter", "Deselected mood at index: $oldSelectedIndex")
         }
         if (newSelectedIndex != -1) {
             notifyItemChanged(newSelectedIndex)
+            android.util.Log.d("KeyboardMoodAdapter", "Selected mood at index: $newSelectedIndex")
+        }
+
+        if (newSelectedIndex == -1 && moodId.isNotEmpty()) {
+            android.util.Log.w("KeyboardMoodAdapter", "Could not find mood with ID: $moodId")
         }
     }
 }
