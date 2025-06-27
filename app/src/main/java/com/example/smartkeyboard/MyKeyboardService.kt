@@ -11,6 +11,7 @@ import android.widget.ImageButton
 import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.FrameLayout
+import android.widget.ImageView
 import android.util.Log
 import android.os.Vibrator
 import android.os.VibrationEffect
@@ -20,7 +21,6 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.BroadcastReceiver
 import android.graphics.Color
-import android.widget.HorizontalScrollView
 import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -48,7 +48,7 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
     private var moodOverlay: View? = null
     private var rvMoodSelector: RecyclerView? = null
     private var moodSelectorPill: FrameLayout? = null
-    private var moodEmoji: TextView? = null
+    private var moodIcon: ImageView? = null
     private var btnEnhanceText: FrameLayout? = null
 
     // Dynamic mood system
@@ -60,11 +60,8 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
     // Broadcast receiver for real-time mood updates
     private var moodUpdateReceiver: BroadcastReceiver? = null
 
-    // Auto suggestion components
-    private var suggestionScrollView: HorizontalScrollView? = null
-    private var suggestionContainer: LinearLayout? = null
+    // Text tracking for AI enhancement (keeping only for manual enhancement button)
     private var currentTypedText = StringBuilder() // Tracks the full sentence context
-    private var suggestionJob: Job? = null
 
     // AI integration
     private var aiTextProcessor: AITextProcessor? = null
@@ -98,9 +95,6 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
 
         // Initialize mood buttons
         setupMoodButtons(inputView)
-
-        // Initialize suggestion bar
-        setupSuggestionBar(inputView)
 
         // Load and setup dynamic moods
         loadAndSetupMoods()
@@ -149,10 +143,9 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
                 val inputConnection = currentInputConnection
                 inputConnection?.deleteSurroundingText(1, 0)
 
-                // Remove last character from typed text and update suggestions
+                // Remove last character from typed text (for manual enhancement only)
                 if (currentTypedText.isNotEmpty()) {
                     currentTypedText.deleteCharAt(currentTypedText.length - 1)
-                    triggerAutoSuggestion()
                 }
             }
             Keyboard.KEYCODE_DONE -> {
@@ -173,7 +166,6 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
 
                 // Clear sentence context on Enter
                 currentTypedText.clear()
-                hideSuggestions()
             }
             Keyboard.KEYCODE_SHIFT -> {
                 // Handle shift key
@@ -202,29 +194,23 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
                     val inputConnection = currentInputConnection
                     inputConnection?.commitText(character.toString(), 1)
 
-                    // Handle space and other characters for auto suggestions
+                    // Track characters for manual enhancement only
                     if (character == ' ') {
                         // Add space to maintain full sentence context
                         currentTypedText.append(character)
                         Log.d(TAG, "Space pressed, current text: '${currentTypedText}'")
-                        triggerAutoSuggestion()
                     } else {
-                        // Add character to current typed text for auto suggestions
+                        // Add character to current typed text for manual enhancement
                         currentTypedText.append(character)
                         Log.d(TAG, "Character '$character' added, current text: '${currentTypedText}'")
 
                         // Clear context on sentence-ending punctuation
                         if (character == '.' || character == '!' || character == '?') {
-                            Log.d(TAG, "Sentence ending detected, will clear context after suggestions")
-                            triggerAutoSuggestion()
-                            // Clear context after a short delay to allow suggestions to be generated
+                            Log.d(TAG, "Sentence ending detected, clearing context")
                             serviceScope.launch {
                                 delay(500)
                                 currentTypedText.clear()
-                                hideSuggestions()
                             }
-                        } else {
-                            triggerAutoSuggestion()
                         }
                     }
                 }
@@ -277,7 +263,7 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
         moodButtonsContainer = inputView.findViewById(R.id.mood_buttons_container)
         moodOverlay = inputView.findViewById(R.id.mood_overlay)
         moodSelectorPill = inputView.findViewById<FrameLayout>(R.id.mood_selector_pill)
-        moodEmoji = inputView.findViewById<TextView>(R.id.mood_emoji)
+        moodIcon = inputView.findViewById<ImageView>(R.id.mood_icon)
         rvMoodSelector = inputView.findViewById<RecyclerView>(R.id.rv_mood_selector)
         btnEnhanceText = inputView.findViewById<FrameLayout>(R.id.btn_enhance_text)
 
@@ -506,13 +492,21 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
     }
 
     private fun updateMoodPillAppearance() {
-        // Update mood emoji in the pill based on selected custom mood or empty state
-        val moodEmojiText = when {
-            allMoods.isEmpty() -> "➕" // Plus icon to indicate "add mood"
-            currentSelectedMood != null -> currentSelectedMood!!.emoji
-            else -> "🎭" // Default theater mask when moods exist but none selected
+        // Update mood icon in the pill based on selected custom mood or empty state
+        val moodIconResource = when {
+            allMoods.isEmpty() -> R.drawable.ic_mood // Default mood icon when no moods
+            currentSelectedMood != null -> {
+                // Map mood names to specific icons
+                when (currentSelectedMood!!.title.lowercase()) {
+                    "respectful" -> R.drawable.ic_mood_respectful
+                    "funny" -> R.drawable.ic_mood_funny
+                    "angry" -> R.drawable.ic_mood_angry
+                    else -> R.drawable.ic_mood // Default mood icon for custom moods
+                }
+            }
+            else -> R.drawable.ic_mood // Default when moods exist but none selected
         }
-        moodEmoji?.text = moodEmojiText
+        moodIcon?.setImageResource(moodIconResource)
 
         // Highlight pill if a mood is selected, dim if no moods available
         moodSelectorPill?.isSelected = currentSelectedMood != null && allMoods.isNotEmpty()
@@ -671,10 +665,6 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
 
             Log.d(TAG, "Enhancing text: '$currentText'")
 
-            // Show "AI is thinking" indicator when manually enhancing
-            showAIThinkingIndicator()
-
-            // DON'T delete text immediately - keep it visible until response arrives
             // Always try to use AI enhancement first
             if (isAIEnabled && aiTextProcessor != null) {
                 // Use AI enhancement - text will be replaced when response arrives
@@ -684,8 +674,6 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
                 inputConnection.performContextMenuAction(android.R.id.selectAll)
                 val enhancedText = enhanceTextLocally(currentText)
                 inputConnection.commitText(enhancedText, 1)
-                // Hide thinking indicator after local enhancement
-                hideSuggestions()
             }
 
         } catch (e: Exception) {
@@ -716,269 +704,13 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
         inputConnection?.commitText(text, 1)
     }
 
-    /**
-     * Setup suggestion bar components
-     */
-    private fun setupSuggestionBar(inputView: View) {
-        suggestionScrollView = inputView.findViewById(R.id.suggestion_scroll_view)
-        suggestionContainer = inputView.findViewById(R.id.suggestion_container)
 
-        Log.d(TAG, "Suggestion bar setup - ScrollView: ${suggestionScrollView != null}, Container: ${suggestionContainer != null}")
-    }
 
-    /**
-     * Trigger automatic suggestion generation
-     */
-    private fun triggerAutoSuggestion() {
-        // Cancel previous suggestion job
-        suggestionJob?.cancel()
 
-        val currentText = currentTypedText.toString().trim()
-        Log.d(TAG, "triggerAutoSuggestion called with text: '$currentText' (length: ${currentText.length})")
 
-        // Show suggestions for text with 3+ characters (better for full sentences)
-        if (currentText.length >= 3) {
-            Log.d(TAG, "Text length >= 3, starting suggestion generation")
-            suggestionJob = serviceScope.launch {
-                delay(500) // Slightly longer debounce for full sentences
-                generateAutoSuggestions(currentText)
-            }
-        } else {
-            Log.d(TAG, "Text too short, hiding suggestions")
-            // Hide suggestions for short text
-            hideSuggestions()
-        }
-    }
 
-    /**
-     * Generate automatic suggestions based on current mood
-     */
-    private suspend fun generateAutoSuggestions(text: String) {
-        try {
-            Log.d(TAG, "Generating auto suggestions for: '$text'")
 
-            // Show "AI is thinking" indicator
-            showAIThinkingIndicator()
 
-            if (!isAIEnabled || aiTextProcessor == null) {
-                Log.d(TAG, "AI not enabled, using local suggestions")
-                // Use local suggestions if AI is not available
-                generateLocalSuggestions(text)
-                return
-            }
-
-            val selectedMood = currentSelectedMood
-            Log.d(TAG, "Using dynamic mood: ${selectedMood?.title} (${selectedMood?.id}) for text: '$text'")
-
-            // Generate AI suggestions with shorter timeout
-            try {
-                val result = withTimeout(3000L) { // 3 second timeout for suggestions
-                    if (selectedMood != null && selectedMood.instructions != null) {
-                        // All moods are now custom moods with instructions
-                        Log.d(TAG, "Generating suggestions with custom mood: '${selectedMood.title}' - Instructions: '${selectedMood.instructions}'")
-                        aiTextProcessor!!.generateSuggestionsWithCustomInstructions(text, selectedMood.instructions!!)
-                    } else {
-                        // No mood selected or no instructions, use simple suggestions
-                        Log.w(TAG, "No custom mood selected or no instructions for suggestions")
-                        val capitalizedText = if (text.isEmpty()) text else {
-                            try {
-                                text.replaceFirstChar { it.uppercase() }
-                            } catch (e: Exception) {
-                                Log.w(TAG, "Error capitalizing text for suggestions", e)
-                                text
-                            }
-                        }
-                        Result.success(listOf(text, capitalizedText))
-                    }
-                }
-
-                result.fold(
-                    onSuccess = { suggestions ->
-                        Log.d(TAG, "AI suggestions generated: $suggestions")
-                        // Show AI suggestions
-                        showSuggestions(suggestions)
-                    },
-                    onFailure = { error ->
-                        Log.e(TAG, "AI suggestions failed: ${error.message}")
-                        // Immediate fallback to simple suggestions
-                        showFallbackSuggestions(text)
-                    }
-                )
-            } catch (e: Exception) {
-                Log.w(TAG, "AI suggestions timed out or failed, using fallback: ${e.message}")
-                // Immediate fallback to simple suggestions
-                showFallbackSuggestions(text)
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error generating auto suggestions", e)
-            generateLocalSuggestions(text)
-        }
-    }
-
-    /**
-     * Generate local suggestions based on mood (fallback only)
-     */
-    private fun generateLocalSuggestions(text: String) {
-        Log.d(TAG, "Generating local fallback suggestions for: '$text'")
-        // Skip AI calls in local suggestions to avoid infinite loops
-        // Go directly to fallback suggestions
-        showFallbackSuggestions(text)
-    }
-
-    /**
-     * Show simple fallback suggestions when AI is not available
-     */
-    private fun showFallbackSuggestions(text: String) {
-        val suggestions = mutableListOf<String>()
-
-        // Add original text first
-        suggestions.add(text)
-
-        // Add simple fallback suggestions (no mood-specific logic since all moods are custom)
-        val selectedMood = currentSelectedMood
-        if (selectedMood != null && text.isNotEmpty()) {
-            // For custom moods, provide basic variations
-            try {
-                val capitalizedText = text.replaceFirstChar { it.uppercase() }
-                suggestions.add(capitalizedText)
-                if (!text.endsWith(".") && !text.endsWith("!") && !text.endsWith("?")) {
-                    suggestions.add("$capitalizedText.")
-                }
-            } catch (e: Exception) {
-                Log.w(TAG, "Error creating fallback suggestions", e)
-                suggestions.add(text)
-            }
-        } else if (text.isNotEmpty()) {
-            // No mood selected, just capitalize
-            try {
-                suggestions.add(text.replaceFirstChar { it.uppercase() })
-            } catch (e: Exception) {
-                Log.w(TAG, "Error capitalizing text for fallback", e)
-                suggestions.add(text)
-            }
-        }
-
-        // Remove duplicates while preserving order
-        val uniqueSuggestions = suggestions.distinct()
-        showSuggestions(uniqueSuggestions)
-    }
-
-    /**
-     * Show "AI is thinking" indicator with auto-timeout
-     */
-    private fun showAIThinkingIndicator() {
-        runOnUiThread {
-            suggestionContainer?.removeAllViews()
-
-            // Create thinking indicator
-            val thinkingView = TextView(this).apply {
-                text = "🤖 AI is thinking..."
-                textSize = 14f
-                setTextColor(ContextCompat.getColor(this@MyKeyboardService, android.R.color.white))
-                background = ContextCompat.getDrawable(this@MyKeyboardService, R.drawable.suggestion_chip_bg)
-                setPadding(24, 12, 24, 12)
-                alpha = 0.7f
-            }
-
-            suggestionContainer?.addView(thinkingView)
-            suggestionScrollView?.visibility = View.VISIBLE
-
-            // Auto-hide thinking indicator after 3 seconds as safety net
-            serviceScope.launch {
-                delay(3000)
-                // Check if still showing thinking indicator
-                runOnUiThread {
-                    if (suggestionContainer?.childCount == 1 &&
-                        (suggestionContainer?.getChildAt(0) as? TextView)?.text?.contains("thinking") == true) {
-                        Log.w(TAG, "AI thinking indicator timed out, showing fallback")
-                        showFallbackSuggestions(currentTypedText.toString())
-                    }
-                }
-            }
-        }
-    }
-
-    /**
-     * Show suggestions in the suggestion bar
-     */
-    private fun showSuggestions(suggestions: List<String>) {
-        runOnUiThread {
-            Log.d(TAG, "Showing ${suggestions.size} suggestions: $suggestions")
-            suggestionContainer?.removeAllViews()
-
-            suggestions.take(3).forEach { suggestion -> // Limit to 3 suggestions
-                val chipView = createSuggestionChip(suggestion)
-                suggestionContainer?.addView(chipView)
-            }
-
-            suggestionScrollView?.visibility = View.VISIBLE
-        }
-    }
-
-    /**
-     * Hide suggestions bar
-     */
-    private fun hideSuggestions() {
-        runOnUiThread {
-            suggestionScrollView?.visibility = View.GONE
-        }
-    }
-
-    /**
-     * Create a suggestion chip view
-     */
-    private fun createSuggestionChip(suggestion: String): View {
-        val chipView = TextView(this).apply {
-            text = suggestion
-            textSize = 14f
-            setTextColor(Color.WHITE)
-            background = ContextCompat.getDrawable(this@MyKeyboardService, R.drawable.suggestion_chip_bg)
-            setPadding(24, 12, 24, 12)
-            maxLines = 1
-            ellipsize = android.text.TextUtils.TruncateAt.END
-            maxWidth = 200 // Limit width
-
-            setOnClickListener {
-                applySuggestion(suggestion)
-            }
-        }
-
-        // Add margin between chips
-        val layoutParams = LinearLayout.LayoutParams(
-            LinearLayout.LayoutParams.WRAP_CONTENT,
-            LinearLayout.LayoutParams.WRAP_CONTENT
-        ).apply {
-            marginEnd = 12
-        }
-        chipView.layoutParams = layoutParams
-
-        return chipView
-    }
-
-    /**
-     * Apply selected suggestion
-     */
-    private fun applySuggestion(suggestion: String) {
-        val inputConnection = currentInputConnection ?: return
-
-        try {
-            // Delete the current typed text (full sentence context)
-            inputConnection.deleteSurroundingText(currentTypedText.length, 0)
-
-            // Insert the suggestion
-            inputConnection.commitText(suggestion, 1)
-
-            // Clear current typed text and hide suggestions
-            currentTypedText.clear()
-            hideSuggestions()
-
-            performHapticFeedback()
-
-            Log.d(TAG, "Applied suggestion: '$suggestion'")
-        } catch (e: Exception) {
-            Log.e(TAG, "Error applying suggestion", e)
-        }
-    }
 
     /**
      * Run code on UI thread

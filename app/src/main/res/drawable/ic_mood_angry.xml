@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Angry/Assertive icon - strong/bold symbol -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M12,2C6.48,2 2,6.48 2,12s4.48,10 10,10 10,-4.48 10,-10S17.52,2 12,2zM12,20c-4.41,0 -8,-3.59 -8,-8s3.59,-8 8,-8 8,3.59 8,8S16.41,20 12,20z"/>
+    <!-- Angry eyebrows -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M6,8l3,1l-1,-2L6,8zM18,8l-2,-1l-1,2L18,8z"/>
+    <!-- Eyes -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M8.5,10.5m-1,0a1,1 0,1 1,2 0a1,1 0,1 1,-2 0"/>
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M15.5,10.5m-1,0a1,1 0,1 1,2 0a1,1 0,1 1,-2 0"/>
+    <!-- Frown -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M12,14c-2.33,0 -4.31,1.46 -5.11,3.5h10.22C16.31,15.46 14.33,14 12,14z"/>
+</vector>

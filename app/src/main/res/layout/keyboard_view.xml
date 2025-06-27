@@ -14,37 +14,37 @@
         <!-- Modern Toolbar with Circular Icon Buttons -->
         <RelativeLayout
             android:layout_width="match_parent"
-            android:layout_height="56dp"
+            android:layout_height="44dp"
             android:background="#FF1C1C1E"
-            android:paddingHorizontal="16dp"
-            android:paddingVertical="8dp"
-            android:layout_marginBottom="12dp">
+            android:paddingHorizontal="12dp"
+            android:paddingVertical="4dp"
+            android:layout_marginBottom="6dp">
 
             <!-- Left side: Circular Mood selector -->
             <FrameLayout
                 android:id="@+id/mood_selector_pill"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
                 android:background="@drawable/enhanced_circular_icon_selector"
                 android:clickable="true"
                 android:focusable="true"
                 android:layout_centerVertical="true">
 
-                <TextView
-                    android:id="@+id/mood_emoji"
-                    android:layout_width="match_parent"
-                    android:layout_height="match_parent"
-                    android:text="❤️"
-                    android:textSize="18sp"
-                    android:gravity="center" />
+                <ImageView
+                    android:id="@+id/mood_icon"
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_gravity="center"
+                    android:src="@drawable/ic_mood_respectful"
+                    android:scaleType="fitCenter" />
 
             </FrameLayout>
 
             <!-- Right side: Circular enhance button -->
             <FrameLayout
                 android:id="@+id/btn_enhance_text"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
                 android:background="@drawable/enhanced_circular_icon_bg"
                 android:layout_alignParentEnd="true"
                 android:layout_centerVertical="true"
@@ -54,40 +54,18 @@
                 android:tooltipText="Enhance your message"
                 android:visibility="visible">
 
-                <TextView
-                    android:layout_width="match_parent"
-                    android:layout_height="match_parent"
-                    android:text="✨"
-                    android:textSize="18sp"
-                    android:gravity="center" />
+                <ImageView
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_gravity="center"
+                    android:src="@drawable/ic_ai"
+                    android:scaleType="fitCenter" />
 
             </FrameLayout>
 
         </RelativeLayout>
 
-        <!-- Auto Suggestion Bar -->
-        <HorizontalScrollView
-            android:id="@+id/suggestion_scroll_view"
-            android:layout_width="match_parent"
-            android:layout_height="48dp"
-            android:background="#FF1E1E2E"
-            android:scrollbars="none"
-            android:visibility="gone"
-            android:layout_marginBottom="8dp">
 
-            <LinearLayout
-                android:id="@+id/suggestion_container"
-                android:layout_width="wrap_content"
-                android:layout_height="match_parent"
-                android:orientation="horizontal"
-                android:paddingHorizontal="12dp"
-                android:gravity="center_vertical">
-
-                <!-- Suggestions will be added dynamically here -->
-
-            </LinearLayout>
-
-        </HorizontalScrollView>
 
         <!-- Main Keyboard View (Material You Style) -->
         <com.example.smartkeyboard.MaterialKeyboardView

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24">
+    <!-- Professional/Respectful icon - tie/formal symbol -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M12,2L10,4v2h4V4L12,2zM10,8v12l2,2l2,-2V8H10zM11,10h2v8h-2V10z"/>
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M9,6h6v2H9V6z"/>
+</vector>
