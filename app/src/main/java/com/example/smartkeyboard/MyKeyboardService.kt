@@ -50,6 +50,7 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
     private var moodSelectorPill: FrameLayout? = null
     private var moodIcon: ImageView? = null
     private var btnEnhanceText: FrameLayout? = null
+    private var btnUndo: FrameLayout? = null
 
     // Dynamic mood system
     private lateinit var customMoodManager: CustomMoodManager
@@ -62,6 +63,10 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
 
     // Text tracking for AI enhancement (keeping only for manual enhancement button)
     private var currentTypedText = StringBuilder() // Tracks the full sentence context
+
+    // Undo functionality
+    private var undoStack = mutableListOf<String>() // Stack to store previous text states
+    private val maxUndoSteps = 10 // Maximum number of undo steps to remember
 
     // AI integration
     private var aiTextProcessor: AITextProcessor? = null
@@ -189,6 +194,9 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
                         keyboardView?.invalidateAllKeys()
                     }
 
+                    // Save text state before making changes (for undo functionality)
+                    saveTextState()
+
                     // For single characters, just commit directly (no mood transformation)
                     // Mood transformation only applies when using the enhance button
                     val inputConnection = currentInputConnection
@@ -266,6 +274,7 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
         moodIcon = inputView.findViewById<ImageView>(R.id.mood_icon)
         rvMoodSelector = inputView.findViewById<RecyclerView>(R.id.rv_mood_selector)
         btnEnhanceText = inputView.findViewById<FrameLayout>(R.id.btn_enhance_text)
+        btnUndo = inputView.findViewById<FrameLayout>(R.id.btn_undo)
 
         // Setup RecyclerView for dynamic moods
         rvMoodSelector?.layoutManager = LinearLayoutManager(this)
@@ -278,6 +287,10 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
         btnEnhanceText?.setOnClickListener {
             performHapticFeedback()
             enhanceCurrentText()
+        }
+        btnUndo?.setOnClickListener {
+            performHapticFeedback()
+            performUndo()
         }
 
         // Click outside to close mood dialog
@@ -702,6 +715,72 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
     private fun commitText(text: String) {
         val inputConnection = currentInputConnection
         inputConnection?.commitText(text, 1)
+    }
+
+    /**
+     * Save current text state for undo functionality
+     */
+    private fun saveTextState() {
+        try {
+            val inputConnection = currentInputConnection ?: return
+
+            // Get current text from the input field
+            val currentText = inputConnection.getTextBeforeCursor(1000, 0)?.toString() ?: ""
+
+            // Add to undo stack if it's different from the last saved state
+            if (undoStack.isEmpty() || undoStack.last() != currentText) {
+                undoStack.add(currentText)
+
+                // Limit the undo stack size
+                if (undoStack.size > maxUndoSteps) {
+                    undoStack.removeAt(0)
+                }
+
+                Log.d(TAG, "Saved text state for undo: '${currentText.take(50)}...' (${undoStack.size} states)")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error saving text state for undo", e)
+        }
+    }
+
+    /**
+     * Perform undo operation
+     */
+    private fun performUndo() {
+        try {
+            val inputConnection = currentInputConnection ?: return
+
+            if (undoStack.isEmpty()) {
+                Log.d(TAG, "No undo states available")
+                return
+            }
+
+            // Get the previous text state
+            val previousText = undoStack.removeLastOrNull() ?: return
+
+            // Get current text to compare
+            val currentText = inputConnection.getTextBeforeCursor(1000, 0)?.toString() ?: ""
+
+            // If current text is the same as previous, try the next one
+            val textToRestore = if (currentText == previousText && undoStack.isNotEmpty()) {
+                undoStack.removeLastOrNull() ?: previousText
+            } else {
+                previousText
+            }
+
+            // Clear current text and insert the previous state
+            inputConnection.deleteSurroundingText(currentText.length, 0)
+            inputConnection.commitText(textToRestore, 1)
+
+            // Update current typed text for AI enhancement
+            currentTypedText.clear()
+            currentTypedText.append(textToRestore)
+
+            Log.d(TAG, "Undo performed: restored '${textToRestore.take(50)}...' (${undoStack.size} states remaining)")
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Error performing undo", e)
+        }
     }
 
 

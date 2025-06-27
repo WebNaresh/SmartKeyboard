@@ -20,7 +20,29 @@
             android:paddingVertical="4dp"
             android:layout_marginBottom="6dp">
 
-            <!-- Left side: Circular Mood selector -->
+            <!-- Left side: Circular Undo button -->
+            <FrameLayout
+                android:id="@+id/btn_undo"
+                android:layout_width="36dp"
+                android:layout_height="36dp"
+                android:background="@drawable/enhanced_circular_icon_bg"
+                android:layout_alignParentStart="true"
+                android:layout_centerVertical="true"
+                android:clickable="true"
+                android:focusable="true"
+                android:contentDescription="Undo last action"
+                android:tooltipText="Undo last action">
+
+                <ImageView
+                    android:layout_width="20dp"
+                    android:layout_height="20dp"
+                    android:layout_gravity="center"
+                    android:src="@drawable/ic_undo"
+                    android:scaleType="fitCenter" />
+
+            </FrameLayout>
+
+            <!-- Center: Circular Mood selector -->
             <FrameLayout
                 android:id="@+id/mood_selector_pill"
                 android:layout_width="36dp"
@@ -28,7 +50,8 @@
                 android:background="@drawable/enhanced_circular_icon_selector"
                 android:clickable="true"
                 android:focusable="true"
-                android:layout_centerVertical="true">
+                android:layout_centerVertical="true"
+                android:layout_centerHorizontal="true">
 
                 <ImageView
                     android:id="@+id/mood_icon"

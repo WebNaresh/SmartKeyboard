@@ -55,34 +55,14 @@ class MaterialKeyboardView @JvmOverloads constructor(
     private var actionButtonScale = 1.0f
     private var spaceKeyPressed = false
 
-    // Long press functionality
-    private val longPressHandler = Handler(Looper.getMainLooper())
-    private var longPressRunnable: Runnable? = null
-    private var isLongPressTriggered = false
-    private var downKey: Keyboard.Key? = null
-    private val longPressDelay = 500L // 500ms for long press
-    private var isLongPressKey = false
 
-    // Number mapping for QWERTYUIOP -> 1234567890
-    private val numberMap = mapOf(
-        113 to 49,  // q -> 1
-        119 to 50,  // w -> 2
-        101 to 51,  // e -> 3
-        114 to 52,  // r -> 4
-        116 to 53,  // t -> 5
-        121 to 54,  // y -> 6
-        117 to 55,  // u -> 7
-        105 to 56,  // i -> 8
-        111 to 57,  // o -> 9
-        112 to 48   // p -> 0
-    )
 
     @Deprecated("Using deprecated KeyboardView API")
     public override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         // drawCustomSpaceKey(canvas) // Temporarily disabled to fix black rectangle
         // drawCustomActionButton(canvas) // Disabled to remove green enter icon
-        drawNumberIndicators(canvas)
+        // drawNumberIndicators(canvas) // Removed - no longer needed with dedicated number row
     }
 
     private fun drawCustomSpaceKey(canvas: Canvas) {
@@ -149,46 +129,7 @@ class MaterialKeyboardView @JvmOverloads constructor(
         canvas.drawPath(path, iconPaint)
     }
 
-    private fun drawNumberIndicators(canvas: Canvas) {
-        val keyboard = keyboard ?: return
-        val keys = keyboard.keys
 
-        // Paint for number indicators
-        val numberPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-            color = Color.parseColor("#AAAAAA") // Lighter gray for better visibility
-            textSize = 20f // Smaller text size
-            textAlign = Paint.Align.CENTER
-            typeface = android.graphics.Typeface.DEFAULT_BOLD
-        }
-
-        // Number mapping for display
-        val numberLabels = mapOf(
-            113 to "1", // q -> 1
-            119 to "2", // w -> 2
-            101 to "3", // e -> 3
-            114 to "4", // r -> 4
-            116 to "5", // t -> 5
-            121 to "6", // y -> 6
-            117 to "7", // u -> 7
-            105 to "8", // i -> 8
-            111 to "9", // o -> 9
-            112 to "0"  // p -> 0
-        )
-
-        // Draw number indicators on top row keys
-        keys.forEach { key ->
-            val primaryCode = key.codes[0]
-            val numberLabel = numberLabels[primaryCode]
-
-            if (numberLabel != null) {
-                // Position the number in the bottom-right area of the key
-                val numberX = key.x + key.width - 16f
-                val numberY = key.y + key.height - 8f
-
-                canvas.drawText(numberLabel, numberX, numberY, numberPaint)
-            }
-        }
-    }
 
     /**
      * Override to safely handle keyboard operations and prevent StringIndexOutOfBoundsException
@@ -236,17 +177,13 @@ class MaterialKeyboardView @JvmOverloads constructor(
                         }
                     }
 
-                    // Find which key was pressed
+                    // Find which key was pressed for spacer key handling
                     val pressedKey = keyboard.keys.find { key ->
                         x >= key.x && x <= key.x + key.width &&
                         y >= key.y && y <= key.y + key.height
                     }
 
                     pressedKey?.let { key ->
-                        downKey = key
-                        isLongPressTriggered = false
-                        isLongPressKey = numberMap.containsKey(key.codes[0])
-
                         // Check if this is a spacer key and disable preview
                         val isSpacerKey = key.codes.isNotEmpty() && key.codes[0] == -1000
                         if (isSpacerKey) {
@@ -258,24 +195,12 @@ class MaterialKeyboardView @JvmOverloads constructor(
                                 // Ignore if method not available
                             }
                         }
-
-                        // Check if this is a top row key that supports long press for numbers
-                        if (isLongPressKey) {
-                            // Start long press timer
-                            longPressRunnable = Runnable {
-                                handleLongPress(key)
-                            }
-                            longPressHandler.postDelayed(longPressRunnable!!, longPressDelay)
-                        }
                     }
                 }
 
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
-                    // Check if this was a spacer key
-                    val wasSpacerKey = downKey?.codes?.isNotEmpty() == true && downKey!!.codes[0] == -1000
-
-                    // Re-enable preview if it was disabled for space key or spacer key
-                    if (isSpaceKeyPressed || wasSpacerKey) {
+                    // Re-enable preview if it was disabled for space key
+                    if (isSpaceKeyPressed) {
                         try {
                             val setPreviewEnabledMethod = javaClass.superclass?.getDeclaredMethod("setPreviewEnabled", Boolean::class.java)
                             setPreviewEnabledMethod?.isAccessible = true
@@ -285,99 +210,28 @@ class MaterialKeyboardView @JvmOverloads constructor(
                         }
                         isSpaceKeyPressed = false
                     }
-
-                    // Cancel long press timer
-                    longPressRunnable?.let { runnable ->
-                        longPressHandler.removeCallbacks(runnable)
-                        longPressRunnable = null
-                    }
-
-                    // If long press was triggered, consume the event
-                    if (isLongPressTriggered) {
-                        isLongPressTriggered = false
-                        downKey = null
-                        isLongPressKey = false
-
-                        // Aggressively dismiss the preview popup
-                        dismissKeyPreview()
-
-                        return true // Consume the event to prevent normal key processing
-                    }
-
-                    // If this was a long press key but long press wasn't triggered, send normal key event
-                    if (isLongPressKey) {
-                        downKey?.let { key ->
-                            // Send normal key press event
-                            val keyboardService = context as? MyKeyboardService
-                            keyboardService?.let { service ->
-                                service.onKey(key.codes[0], key.codes)
-                            }
-                        }
-                        downKey = null
-                        isLongPressKey = false
-                        return true
-                    }
-
-                    downKey = null
-                    isLongPressKey = false
                 }
 
-                MotionEvent.ACTION_MOVE -> {
-                    // Check if finger moved outside the key bounds
-                    downKey?.let { key ->
-                        if (x < key.x || x > key.x + key.width ||
-                            y < key.y || y > key.y + key.height) {
-                            // Cancel long press if finger moved outside
-                            longPressRunnable?.let { runnable ->
-                                longPressHandler.removeCallbacks(runnable)
-                                longPressRunnable = null
-                            }
-                        }
-                    }
-                }
+
             }
         }
 
-        // Only call super for non-long-press keys, with safety wrapper
-        return if (isLongPressKey) {
+        // Call super with safety wrapper
+        return try {
+            super.onTouchEvent(me)
+        } catch (e: StringIndexOutOfBoundsException) {
+            // Catch and log StringIndexOutOfBoundsException from KeyboardView.adjustCase()
+            android.util.Log.w("MaterialKeyboardView", "Caught StringIndexOutOfBoundsException in onTouchEvent", e)
+            // Return true to indicate the event was handled
             true
-        } else {
-            try {
-                super.onTouchEvent(me)
-            } catch (e: StringIndexOutOfBoundsException) {
-                // Catch and log StringIndexOutOfBoundsException from KeyboardView.adjustCase()
-                android.util.Log.w("MaterialKeyboardView", "Caught StringIndexOutOfBoundsException in onTouchEvent", e)
-                // Return true to indicate the event was handled
-                true
-            } catch (e: Exception) {
-                // Catch any other exceptions that might occur
-                android.util.Log.w("MaterialKeyboardView", "Caught exception in onTouchEvent", e)
-                true
-            }
+        } catch (e: Exception) {
+            // Catch any other exceptions that might occur
+            android.util.Log.w("MaterialKeyboardView", "Caught exception in onTouchEvent", e)
+            true
         }
     }
 
-    private fun handleLongPress(key: Keyboard.Key) {
-        val primaryCode = key.codes[0]
-        val numberCode = numberMap[primaryCode]
 
-        if (numberCode != null) {
-            isLongPressTriggered = true
-
-            // Immediately dismiss the key preview popup
-            dismissKeyPreview()
-
-            // Get the keyboard service to input the number
-            val keyboardService = context as? MyKeyboardService
-            keyboardService?.let { service ->
-                val inputConnection = service.currentInputConnection
-                inputConnection?.commitText(numberCode.toChar().toString(), 1)
-
-                // Provide haptic feedback
-                service.performHapticFeedback()
-            }
-        }
-    }
 
     /**
      * Override to disable key preview for space key specifically
