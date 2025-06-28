@@ -277,6 +277,9 @@ class MyKeyboardService : InputMethodService() {
             performHapticFeedback()
             // TODO: Implement symbols keyboard
         }
+
+        // Initialize keyboard case (start with lowercase)
+        updateKeyboardCase()
     }
 
     private fun commitText(text: String) {
