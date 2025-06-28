@@ -112,7 +112,7 @@
         android:layout_marginBottom="16dp"
         android:inputType="textMultiLine|textCapSentences"
         android:gravity="top"
-        android:maxLength="500" />
+        android:maxLength="10000" />
 
     <Button
         android:id="@+id/btn_create_mood"

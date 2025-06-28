@@ -8,6 +8,7 @@ import android.util.AttributeSet
 import android.view.MotionEvent
 import android.os.Handler
 import android.os.Looper
+import android.os.Message
 import androidx.core.content.ContextCompat
 
 @Suppress("DEPRECATION")
@@ -151,6 +152,49 @@ class MaterialKeyboardView @JvmOverloads constructor(
             }
         }
         super.setKeyboard(keyboard)
+    }
+
+    /**
+     * Custom Handler that blocks showKey messages to prevent crashes
+     */
+    private val safeHandler = object : Handler(Looper.getMainLooper()) {
+        override fun handleMessage(msg: Message) {
+            // Block all messages that could trigger showKey
+            // Don't call super.handleMessage to prevent the crash
+            android.util.Log.d("MaterialKeyboardView", "Blocked Handler message: ${msg.what}")
+        }
+    }
+
+    /**
+     * Initialize with preview disabled to prevent crashes
+     */
+    init {
+        try {
+            // Disable preview functionality completely
+            isPreviewEnabled = false
+
+            // Try to replace the internal handler with our safe handler
+            val handlerField = javaClass.superclass?.getDeclaredField("mHandler")
+            handlerField?.isAccessible = true
+            handlerField?.set(this, safeHandler)
+
+            // Try to set preview layout to null via reflection
+            val previewLayoutField = javaClass.superclass?.getDeclaredField("mPreviewText")
+            previewLayoutField?.isAccessible = true
+            previewLayoutField?.set(this, null)
+
+            // Try alternative field names
+            try {
+                val previewPopupField = javaClass.superclass?.getDeclaredField("mPreviewPopup")
+                previewPopupField?.isAccessible = true
+                previewPopupField?.set(this, null)
+            } catch (e: Exception) {
+                // Ignore
+            }
+
+        } catch (e: Exception) {
+            android.util.Log.w("MaterialKeyboardView", "Could not disable preview via reflection", e)
+        }
     }
 
     @Deprecated("Using deprecated KeyboardView API")

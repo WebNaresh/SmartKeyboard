@@ -40,12 +40,14 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 import kotlinx.coroutines.withTimeout
+import android.view.MotionEvent
 
 @Suppress("DEPRECATION")
-class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionListener {
+class MyKeyboardService : InputMethodService() {
 
-    private var keyboardView: MaterialKeyboardView? = null
-    private var keyboard: Keyboard? = null
+    // Simple keyboard container
+    private var keyboardContainer: LinearLayout? = null
+    private var isShifted = false
 
     // Mood selection state
     private var moodButtonsContainer: LinearLayout? = null
@@ -84,7 +86,10 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
 
     // Keyboard state
     private var moodButtonsVisible = false
-    private var isShifted = false
+
+    // Long press backspace functionality
+    private var backspaceLongPressJob: Job? = null
+    private var isBackspaceLongPressed = false
 
     // Haptic feedback
     private var vibrator: Vibrator? = null
@@ -98,10 +103,6 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
 
     override fun onCreateInputView(): View {
         val inputView = layoutInflater.inflate(R.layout.keyboard_view, null)
-        keyboardView = inputView.findViewById(R.id.keyboard_view)
-        keyboard = Keyboard(this, R.xml.qwerty)
-        keyboardView?.keyboard = keyboard
-        keyboardView?.setOnKeyboardActionListener(this)
 
         // Initialize vibrator for haptic feedback
         vibrator = getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
@@ -111,6 +112,9 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
 
         // Initialize mood buttons
         setupMoodButtons(inputView)
+
+        // Setup simple keyboard buttons
+        setupSimpleKeyboard(inputView)
 
         // Load and setup dynamic moods
         loadAndSetupMoods()
@@ -123,6 +127,8 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
 
     override fun onDestroy() {
         super.onDestroy()
+        // Stop any ongoing long press operations
+        stopBackspaceLongPress()
         // Unregister broadcast receiver
         unregisterMoodUpdateReceiver()
     }
@@ -135,151 +141,10 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
     
     override fun onStartInputView(attribute: EditorInfo?, restarting: Boolean) {
         super.onStartInputView(attribute, restarting)
-        keyboardView?.keyboard = keyboard
-        keyboardView?.closing()
+        // Simple keyboard doesn't need special initialization
     }
     
-    // KeyboardView.OnKeyboardActionListener methods
-    @Deprecated("Using deprecated KeyboardView API")
-    override fun onPress(primaryCode: Int) {
-        // Called when a key is pressed - provide haptic feedback
-        performHapticFeedback()
-    }
 
-    @Deprecated("Using deprecated KeyboardView API")
-    override fun onRelease(primaryCode: Int) {
-        // Called when a key is released
-    }
-
-    @Deprecated("Using deprecated KeyboardView API")
-    override fun onKey(primaryCode: Int, keyCodes: IntArray?) {
-        when (primaryCode) {
-            Keyboard.KEYCODE_DELETE -> {
-                // Save text state before deletion (for undo functionality)
-                saveTextState()
-
-                // Handle backspace
-                val inputConnection = currentInputConnection
-                inputConnection?.deleteSurroundingText(1, 0)
-
-                // Remove last character from typed text (for manual enhancement only)
-                if (currentTypedText.isNotEmpty()) {
-                    currentTypedText.deleteCharAt(currentTypedText.length - 1)
-                }
-            }
-            Keyboard.KEYCODE_DONE -> {
-                // Handle enter/done
-                val inputConnection = currentInputConnection
-                inputConnection?.sendKeyEvent(
-                    android.view.KeyEvent(
-                        android.view.KeyEvent.ACTION_DOWN,
-                        android.view.KeyEvent.KEYCODE_ENTER
-                    )
-                )
-                inputConnection?.sendKeyEvent(
-                    android.view.KeyEvent(
-                        android.view.KeyEvent.ACTION_UP,
-                        android.view.KeyEvent.KEYCODE_ENTER
-                    )
-                )
-
-                // Clear sentence context on Enter
-                currentTypedText.clear()
-            }
-            Keyboard.KEYCODE_SHIFT -> {
-                // Handle shift key
-                handleShift()
-            }
-            -1000 -> {
-                // Spacer key - do nothing (centering spacer keys)
-                Log.d(TAG, "Spacer key pressed - ignoring")
-            }
-            else -> {
-                // Handle regular character input
-                if (primaryCode > 0) {
-                    var character = primaryCode.toChar()
-
-                    // Apply shift/uppercase if needed
-                    if (isShifted && character.isLetter()) {
-                        character = character.uppercaseChar()
-                        // Auto-disable shift after typing one character (like normal keyboards)
-                        isShifted = false
-                        keyboard?.isShifted = false
-                        keyboardView?.invalidateAllKeys()
-                    }
-
-                    // Save text state before making changes (for undo functionality)
-                    saveTextState()
-
-                    // For single characters, just commit directly (no mood transformation)
-                    // Mood transformation only applies when using the enhance button
-                    val inputConnection = currentInputConnection
-                    inputConnection?.commitText(character.toString(), 1)
-
-                    // Track characters for manual enhancement only
-                    if (character == ' ') {
-                        // Add space to maintain full sentence context
-                        currentTypedText.append(character)
-                        Log.d(TAG, "Space pressed, current text: '${currentTypedText}'")
-                    } else {
-                        // Add character to current typed text for manual enhancement
-                        currentTypedText.append(character)
-                        Log.d(TAG, "Character '$character' added, current text: '${currentTypedText}'")
-
-                        // Clear context on sentence-ending punctuation
-                        if (character == '.' || character == '!' || character == '?') {
-                            Log.d(TAG, "Sentence ending detected, clearing context")
-                            serviceScope.launch {
-                                delay(500)
-                                currentTypedText.clear()
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-    
-    @Deprecated("Using deprecated KeyboardView API")
-    override fun onText(text: CharSequence?) {
-        text?.let { handleTextInput(it.toString()) }
-    }
-
-    @Deprecated("Using deprecated KeyboardView API")
-    override fun swipeLeft() {
-        // Handle swipe left gesture
-    }
-
-    @Deprecated("Using deprecated KeyboardView API")
-    override fun swipeRight() {
-        // Handle swipe right gesture
-    }
-
-    @Deprecated("Using deprecated KeyboardView API")
-    override fun swipeDown() {
-        // Handle swipe down gesture
-    }
-
-    @Deprecated("Using deprecated KeyboardView API")
-    override fun swipeUp() {
-        // Handle swipe up gesture
-    }
-
-    private fun handleShift() {
-        try {
-            if (keyboard != null) {
-                isShifted = !keyboard!!.isShifted
-                keyboard!!.isShifted = isShifted
-                keyboardView?.invalidateAllKeys()
-                Log.d(TAG, "Shift toggled: isShifted = $isShifted")
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Error handling shift key", e)
-            // Reset shift state on error
-            isShifted = false
-            keyboard?.isShifted = false
-        }
-    }
 
     private fun setupMoodButtons(inputView: View) {
         moodButtonsContainer = inputView.findViewById(R.id.mood_buttons_container)
@@ -334,6 +199,209 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
 
         updateMoodButtonsUI()
         updateMoodPillAppearance()
+    }
+
+    /**
+     * Setup simple button-based keyboard to avoid KeyboardView crashes
+     */
+    private fun setupSimpleKeyboard(inputView: View) {
+        keyboardContainer = inputView.findViewById(R.id.keyboard_container)
+
+        // Setup all keyboard buttons
+        val keys = mapOf(
+            // Numbers
+            R.id.key_1 to "1", R.id.key_2 to "2", R.id.key_3 to "3", R.id.key_4 to "4", R.id.key_5 to "5",
+            R.id.key_6 to "6", R.id.key_7 to "7", R.id.key_8 to "8", R.id.key_9 to "9", R.id.key_0 to "0",
+            // Letters
+            R.id.key_q to "q", R.id.key_w to "w", R.id.key_e to "e", R.id.key_r to "r", R.id.key_t to "t",
+            R.id.key_y to "y", R.id.key_u to "u", R.id.key_i to "i", R.id.key_o to "o", R.id.key_p to "p",
+            R.id.key_a to "a", R.id.key_s to "s", R.id.key_d to "d", R.id.key_f to "f", R.id.key_g to "g",
+            R.id.key_h to "h", R.id.key_j to "j", R.id.key_k to "k", R.id.key_l to "l",
+            R.id.key_z to "z", R.id.key_x to "x", R.id.key_c to "c", R.id.key_v to "v", R.id.key_b to "b",
+            R.id.key_n to "n", R.id.key_m to "m",
+            // Symbols
+            R.id.key_comma to ",", R.id.key_period to "."
+        )
+
+        // Setup character keys
+        keys.forEach { (keyId, char) ->
+            inputView.findViewById<Button>(keyId)?.setOnClickListener {
+                performHapticFeedback()
+                val text = if (isShifted && char.matches(Regex("[a-z]"))) char.uppercase() else char
+                commitText(text)
+            }
+        }
+
+        // Setup special keys
+        inputView.findViewById<Button>(R.id.key_space)?.setOnClickListener {
+            performHapticFeedback()
+            commitText(" ")
+        }
+
+        // Setup backspace with long press functionality
+        val backspaceButton = inputView.findViewById<Button>(R.id.key_backspace)
+        backspaceButton?.setOnClickListener {
+            if (!isBackspaceLongPressed) {
+                performHapticFeedback()
+                deleteText()
+            }
+        }
+
+        // Add long press functionality to backspace
+        backspaceButton?.setOnTouchListener { _, event ->
+            when (event.action) {
+                MotionEvent.ACTION_DOWN -> {
+                    isBackspaceLongPressed = false
+                    startBackspaceLongPress()
+                    true
+                }
+                MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                    stopBackspaceLongPress()
+                    false // Let the click listener handle single tap
+                }
+                else -> false
+            }
+        }
+
+        inputView.findViewById<Button>(R.id.key_enter)?.setOnClickListener {
+            performHapticFeedback()
+            sendKeyChar('\n')
+        }
+
+        inputView.findViewById<Button>(R.id.key_shift)?.setOnClickListener {
+            performHapticFeedback()
+            toggleShift()
+        }
+
+        inputView.findViewById<Button>(R.id.key_symbols)?.setOnClickListener {
+            performHapticFeedback()
+            // TODO: Implement symbols keyboard
+        }
+    }
+
+    private fun commitText(text: String) {
+        val ic = currentInputConnection ?: return
+        ic.commitText(text, 1)
+
+        // Auto-disable shift after typing a letter (like normal keyboards)
+        if (isShifted && text.matches(Regex("[a-zA-Z]"))) {
+            isShifted = false
+            updateKeyboardCase()
+        }
+
+        // Track text for enhancement functionality
+        if (text == " ") {
+            currentTypedText.append(text)
+            Log.d(TAG, "Space pressed, current text: '${currentTypedText}'")
+        } else {
+            currentTypedText.append(text)
+            Log.d(TAG, "Character '$text' added, current text: '${currentTypedText}'")
+
+            // Clear context on sentence-ending punctuation
+            if (text == "." || text == "!" || text == "?") {
+                Log.d(TAG, "Sentence ending detected, clearing context")
+                serviceScope.launch {
+                    delay(500)
+                    currentTypedText.clear()
+                }
+            }
+        }
+
+        saveTextState()
+    }
+
+    private fun deleteText() {
+        val ic = currentInputConnection ?: return
+        ic.deleteSurroundingText(1, 0)
+
+        // Remove last character from typed text tracking
+        if (currentTypedText.isNotEmpty()) {
+            currentTypedText.deleteCharAt(currentTypedText.length - 1)
+        }
+
+        saveTextState()
+    }
+
+    private fun toggleShift() {
+        isShifted = !isShifted
+
+        // Update shift key appearance
+        keyboardContainer?.findViewById<Button>(R.id.key_shift)?.isSelected = isShifted
+
+        // Update all letter keys to show uppercase/lowercase
+        updateKeyboardCase()
+    }
+
+    /**
+     * Update all letter keys to show uppercase or lowercase based on shift state
+     */
+    private fun updateKeyboardCase() {
+        val letterKeys = mapOf(
+            R.id.key_q to "q", R.id.key_w to "w", R.id.key_e to "e", R.id.key_r to "r", R.id.key_t to "t",
+            R.id.key_y to "y", R.id.key_u to "u", R.id.key_i to "i", R.id.key_o to "o", R.id.key_p to "p",
+            R.id.key_a to "a", R.id.key_s to "s", R.id.key_d to "d", R.id.key_f to "f", R.id.key_g to "g",
+            R.id.key_h to "h", R.id.key_j to "j", R.id.key_k to "k", R.id.key_l to "l",
+            R.id.key_z to "z", R.id.key_x to "x", R.id.key_c to "c", R.id.key_v to "v", R.id.key_b to "b",
+            R.id.key_n to "n", R.id.key_m to "m"
+        )
+
+        letterKeys.forEach { (keyId, baseLetter) ->
+            keyboardContainer?.findViewById<Button>(keyId)?.text =
+                if (isShifted) baseLetter.uppercase() else baseLetter.lowercase()
+        }
+    }
+
+    /**
+     * Start long press backspace functionality with optimized timing
+     */
+    private fun startBackspaceLongPress() {
+        // Cancel any existing long press job
+        stopBackspaceLongPress()
+
+        backspaceLongPressJob = serviceScope.launch {
+            try {
+                // Wait for optimized long press threshold (300ms)
+                delay(300)
+
+                // Mark as long pressed to prevent single tap action
+                isBackspaceLongPressed = true
+
+                // Save text state before starting continuous deletion
+                saveTextState()
+
+                // Start with optimized deletion intervals (50ms)
+                var deletionInterval = 50L
+                val startTime = System.currentTimeMillis()
+
+                while (backspaceLongPressJob?.isActive == true && isBackspaceLongPressed) {
+                    // Perform deletion with haptic feedback (25ms vibration)
+                    performHapticFeedback()
+                    deleteText()
+
+                    // Progressive acceleration based on elapsed time
+                    val elapsedTime = System.currentTimeMillis() - startTime
+                    deletionInterval = when {
+                        elapsedTime > 2000 -> 15L  // Maximum speed after 2 seconds
+                        elapsedTime > 1000 -> 25L  // Faster after 1 second
+                        else -> 50L                // Initial speed for first second
+                    }
+
+                    // Wait for next deletion
+                    delay(deletionInterval)
+                }
+            } catch (e: Exception) {
+                Log.d(TAG, "Long press backspace cancelled or interrupted")
+            }
+        }
+    }
+
+    /**
+     * Stop long press backspace functionality
+     */
+    private fun stopBackspaceLongPress() {
+        backspaceLongPressJob?.cancel()
+        backspaceLongPressJob = null
+        isBackspaceLongPressed = false
     }
 
     /**
@@ -734,13 +802,7 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
         }
     }
 
-    /**
-     * Commit text to input connection
-     */
-    private fun commitText(text: String) {
-        val inputConnection = currentInputConnection
-        inputConnection?.commitText(text, 1)
-    }
+
 
     /**
      * Save current text state for undo functionality

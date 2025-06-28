@@ -37,6 +37,6 @@
         android:hint="Describe how the AI should respond in this mood..."
         android:inputType="textMultiLine|textCapSentences"
         android:gravity="top"
-        android:maxLength="500" />
+        android:maxLength="10000" />
 
 </LinearLayout>
