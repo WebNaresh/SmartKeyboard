@@ -12,6 +12,9 @@ import android.widget.LinearLayout
 import android.widget.TextView
 import android.widget.FrameLayout
 import android.widget.ImageView
+import android.widget.EditText
+import android.text.TextWatcher
+import android.text.Editable
 import android.util.Log
 import android.os.Vibrator
 import android.os.VibrationEffect
@@ -35,6 +38,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+
 import kotlinx.coroutines.withTimeout
 
 @Suppress("DEPRECATION")
@@ -51,6 +55,11 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
     private var moodIcon: ImageView? = null
     private var btnEnhanceText: FrameLayout? = null
     private var btnUndo: FrameLayout? = null
+
+    // Modal search components
+    private var etSearchMoods: EditText? = null
+    private var btnCloseModal: ImageView? = null
+    private var btnClearSearch: ImageView? = null
 
     // Dynamic mood system
     private lateinit var customMoodManager: CustomMoodManager
@@ -84,7 +93,9 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
     enum class MoodType {
         NORMAL, RESPECTFUL, FUNNY, ANGRY
     }
-    
+
+
+
     override fun onCreateInputView(): View {
         val inputView = layoutInflater.inflate(R.layout.keyboard_view, null)
         keyboardView = inputView.findViewById(R.id.keyboard_view)
@@ -279,6 +290,11 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
         btnEnhanceText = inputView.findViewById<FrameLayout>(R.id.btn_enhance_text)
         btnUndo = inputView.findViewById<FrameLayout>(R.id.btn_undo)
 
+        // Initialize search components
+        etSearchMoods = inputView.findViewById<EditText>(R.id.et_search_moods)
+        btnCloseModal = inputView.findViewById<ImageView>(R.id.btn_close_modal)
+        btnClearSearch = inputView.findViewById<ImageView>(R.id.btn_clear_search)
+
         // Setup RecyclerView for dynamic moods
         rvMoodSelector?.layoutManager = LinearLayoutManager(this)
 
@@ -295,6 +311,9 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
             performHapticFeedback()
             performUndo()
         }
+
+        // Setup search functionality
+        setupSearchFunctionality()
 
         // Click outside to close mood dialog
         moodOverlay?.setOnClickListener {
@@ -336,7 +355,7 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
 
         // Setup adapter
         keyboardMoodAdapter = KeyboardMoodAdapter(
-            moods = allMoods,
+            allMoods = allMoods,
             selectedMoodId = currentSelectedMood?.id ?: "",
             onMoodClick = { mood -> selectDynamicMood(mood) }
         )
@@ -789,13 +808,45 @@ class MyKeyboardService : InputMethodService(), KeyboardView.OnKeyboardActionLis
         }
     }
 
+    /**
+     * Setup search functionality for mood modal
+     */
+    private fun setupSearchFunctionality() {
+        // Close modal button
+        btnCloseModal?.setOnClickListener {
+            performHapticFeedback()
+            if (moodButtonsVisible) {
+                toggleMoodButtonsVisibility()
+            }
+        }
 
+        // Clear search button
+        btnClearSearch?.setOnClickListener {
+            performHapticFeedback()
+            etSearchMoods?.setText("")
+        }
 
+        // Search text watcher
+        etSearchMoods?.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
 
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
+                val query = s?.toString() ?: ""
 
+                // Show/hide clear button based on text
+                btnClearSearch?.visibility = if (query.isEmpty()) View.GONE else View.VISIBLE
 
+                // Filter moods
+                if (::keyboardMoodAdapter.isInitialized) {
+                    keyboardMoodAdapter.filter(query)
+                }
 
+                Log.d(TAG, "Search query: '$query'")
+            }
 
+            override fun afterTextChanged(s: Editable?) {}
+        })
+    }
 
     /**
      * Run code on UI thread

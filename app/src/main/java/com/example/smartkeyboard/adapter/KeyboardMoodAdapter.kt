@@ -9,10 +9,13 @@ import com.example.smartkeyboard.R
 import com.example.smartkeyboard.data.MoodData
 
 class KeyboardMoodAdapter(
-    private var moods: List<MoodData>,
+    private var allMoods: List<MoodData>,
     private var selectedMoodId: String,
     private val onMoodClick: (MoodData) -> Unit
 ) : RecyclerView.Adapter<KeyboardMoodAdapter.MoodViewHolder>() {
+
+    private var filteredMoods: List<MoodData> = allMoods
+    private var currentSearchQuery: String = ""
 
     class MoodViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         val tvMoodEmoji: TextView = itemView.findViewById(R.id.tv_mood_emoji)
@@ -26,7 +29,7 @@ class KeyboardMoodAdapter(
     }
 
     override fun onBindViewHolder(holder: MoodViewHolder, position: Int) {
-        val mood = moods[position]
+        val mood = filteredMoods[position]
         
         holder.tvMoodEmoji.text = mood.emoji
         holder.tvMoodTitle.text = mood.title
@@ -43,47 +46,38 @@ class KeyboardMoodAdapter(
         }
     }
 
-    override fun getItemCount(): Int = moods.size
+    override fun getItemCount(): Int = filteredMoods.size
 
     fun updateMoods(newMoods: List<MoodData>) {
         android.util.Log.d("KeyboardMoodAdapter", "Updating moods: ${newMoods.size} moods")
 
-        // Check if the data actually changed to avoid unnecessary updates
-        val oldSize = moods.size
-        val newSize = newMoods.size
+        allMoods = newMoods
+        applyFilter(currentSearchQuery)
+    }
 
-        moods = newMoods
+    fun filter(query: String) {
+        currentSearchQuery = query
+        applyFilter(query)
+    }
 
-        // Use more efficient notification methods when possible
-        when {
-            oldSize == 0 && newSize > 0 -> {
-                // First time loading moods
-                notifyDataSetChanged()
-                android.util.Log.d("KeyboardMoodAdapter", "Initial mood load: $newSize moods")
-            }
-            oldSize < newSize -> {
-                // New moods added
-                notifyItemRangeInserted(oldSize, newSize - oldSize)
-                android.util.Log.d("KeyboardMoodAdapter", "Added ${newSize - oldSize} new moods")
-            }
-            oldSize > newSize -> {
-                // Moods removed
-                notifyItemRangeRemoved(newSize, oldSize - newSize)
-                android.util.Log.d("KeyboardMoodAdapter", "Removed ${oldSize - newSize} moods")
-            }
-            else -> {
-                // Same count, might be updates
-                notifyDataSetChanged()
-                android.util.Log.d("KeyboardMoodAdapter", "Updated existing moods")
+    private fun applyFilter(query: String) {
+        filteredMoods = if (query.isEmpty()) {
+            allMoods
+        } else {
+            allMoods.filter { mood ->
+                mood.title.contains(query, ignoreCase = true) ||
+                mood.instructions?.contains(query, ignoreCase = true) == true
             }
         }
+        notifyDataSetChanged()
+        android.util.Log.d("KeyboardMoodAdapter", "Filtered moods: ${filteredMoods.size} of ${allMoods.size} total")
     }
 
     fun updateSelectedMood(moodId: String) {
         android.util.Log.d("KeyboardMoodAdapter", "Updating selected mood to: $moodId")
 
-        val oldSelectedIndex = moods.indexOfFirst { it.id == selectedMoodId }
-        val newSelectedIndex = moods.indexOfFirst { it.id == moodId }
+        val oldSelectedIndex = filteredMoods.indexOfFirst { it.id == selectedMoodId }
+        val newSelectedIndex = filteredMoods.indexOfFirst { it.id == moodId }
 
         selectedMoodId = moodId
 
