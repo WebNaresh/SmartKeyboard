@@ -253,11 +253,11 @@ class MyKeyboardService : InputMethodService() {
                 MotionEvent.ACTION_DOWN -> {
                     isBackspaceLongPressed = false
                     startBackspaceLongPress()
-                    true
+                    false // Don't consume the event, let click listener work
                 }
                 MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
                     stopBackspaceLongPress()
-                    false // Let the click listener handle single tap
+                    false // Don't consume the event
                 }
                 else -> false
             }
